@@ -15,10 +15,10 @@ public struct SDFVoxel
 
 public struct TriangleData
 {
-    public Vector3 a;
-    public Vector3 b;
-    public Vector3 c;
-    public Vector2 uv;
-    public Vector3 normal;
+    public float3 a;
+    public float3 b;
+    public float3 c;
+    public float2 uv;
+    public float3 normal;
     public int subMeshIdx;
 }

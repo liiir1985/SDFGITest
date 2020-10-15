@@ -69,7 +69,7 @@ public class SDF : EditorWindow
         if (mr)
         {
             var mf = mr.GetComponent<MeshFilter>();
-            mesh = mf.mesh;
+            mesh = mf.sharedMesh;
         }
         // Assign the sub-mesh index, if there are more than 1 in the mesh.
         if (mesh.subMeshCount > 1)
@@ -209,7 +209,7 @@ public class SDF : EditorWindow
 
         SDFComputeJob computeJob = new SDFComputeJob()
         {
-            Vertices = triangleArray,
+            Triangles = triangleArray,
             Voxels = voxels,
             Dimension = dimensionJob,
             BoundSize = bounds.size,
