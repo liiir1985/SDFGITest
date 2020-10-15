@@ -6,9 +6,13 @@
 using UnityEngine;
 using UnityEditor;
 
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 public class SDF : EditorWindow
 {
     Mesh mesh;
+    MeshRenderer mr;
     int subMeshIndex = 0;
     float padding = 0f;
     int resolution = 32;
@@ -19,6 +23,12 @@ public class SDF : EditorWindow
         public Vector3 a;
         public Vector3 b;
         public Vector3 c;
+    }
+
+    struct TextureInfo
+    {
+        public Texture2D Texture;
+        public Color Tint;
     }
 
     [MenuItem("Signed Distance Field/Generate")]
@@ -45,9 +55,9 @@ public class SDF : EditorWindow
 
         // Assign the mesh.
         mesh = EditorGUILayout.ObjectField("Mesh", mesh, typeof(Mesh), false) as Mesh;
-
+        mr = EditorGUILayout.ObjectField("Mesh Renderer", mr, typeof(MeshRenderer), true) as MeshRenderer;
         // If the mesh is null, don't draw the rest of the GUI.
-        if (mesh == null)
+        if (mesh == null && mr == null)
         {
             if (GUILayout.Button("Close"))
             {
@@ -56,7 +66,11 @@ public class SDF : EditorWindow
 
             return;
         }
-
+        if (mr)
+        {
+            var mf = mr.GetComponent<MeshFilter>();
+            mesh = mf.mesh;
+        }
         // Assign the sub-mesh index, if there are more than 1 in the mesh.
         if (mesh.subMeshCount > 1)
         {
@@ -71,7 +85,10 @@ public class SDF : EditorWindow
 
         if (GUILayout.Button("Create"))
         {
-            CreateSDF();
+            if (mr)
+                CreateSDFJob();
+            else
+                CreateSDF();
         }
 
         if (GUILayout.Button("Close"))
@@ -83,6 +100,128 @@ public class SDF : EditorWindow
     private void OnInspectorUpdate()
     {
         Repaint();
+    }
+
+    private void CreateSDFJob()
+    {
+        if(!IsPowerOfTwo(resolution))
+        {
+            Debug.LogError("Resolution is not power of 2");
+            return;
+        }
+
+        var bounds = mesh.bounds;
+        var ceilSize = new Vector3(Mathf.Ceil(bounds.size.x), Mathf.Ceil(bounds.size.y), Mathf.Ceil(bounds.size.z));
+        var dimension = ceilSize * resolution;
+
+        // Get an array of triangles from the mesh.
+        Vector3[] meshVertices = mesh.vertices;
+        int[] meshTriangles = mesh.triangles;
+        Vector3[] normals = mesh.normals;
+        Vector2[] uvs = mesh.uv;
+        int[] indexStarts = new int[mesh.subMeshCount];
+        for(int i = 0; i < indexStarts.Length; i++)
+        {
+            var submesh = mesh.GetSubMesh(i);
+            indexStarts[i] = submesh.indexStart;
+        }
+        NativeArray<TriangleData> triangleArray = new NativeArray<TriangleData>(meshTriangles.Length / 3, Allocator.TempJob);
+        int submeshIdx = -1;
+        int curStart = indexStarts[0];
+        for (int t = 0; t < triangleArray.Length; t++)
+        {
+            TriangleData data = new TriangleData();
+            var index = 3 * t;
+            if (index >= curStart)
+            {
+                submeshIdx++;
+                if (indexStarts.Length > submeshIdx + 1)
+                {
+                    curStart = indexStarts[submeshIdx + 1];
+                }
+                else
+                    curStart = meshTriangles.Length;
+            }
+            data.a = meshVertices[meshTriangles[index + 0]] - bounds.center;
+            data.b = meshVertices[meshTriangles[index + 1]] - bounds.center;
+            data.c = meshVertices[meshTriangles[index + 2]] - bounds.center;
+            data.normal = normals[t];
+            data.uv = uvs[t];
+            data.subMeshIdx = submeshIdx;
+
+            triangleArray[t] = data;
+        }
+
+        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>((int)dimension.x * (int)dimension.y * (int)dimension.z, Allocator.TempJob);
+
+        var mats = mr.sharedMaterials;
+        TextureInfo[] albedo = new TextureInfo[mesh.subMeshCount];
+        TextureInfo[] surface = new TextureInfo[mesh.subMeshCount];
+        TextureInfo[] emission = new TextureInfo[mesh.subMeshCount];
+        int[] pixels = new int[3];
+        for(int i = 0; i < mesh.subMeshCount; i++)
+        {
+            if (i < mats.Length)
+            {
+                var mat = mats[i];
+                albedo[i].Texture = mat.GetTexture("_BaseMap") as Texture2D;
+                albedo[i].Tint = mat.GetColor("_BaseColor");
+                if (albedo[i].Texture)
+                {
+                    pixels[0] += albedo[i].Texture.width * albedo[i].Texture.height;
+                }
+                else
+                    pixels[0] += 1;
+                surface[i].Texture = mat.GetTexture("_MetallicGlossMap") as Texture2D;
+                float metallic = 1f;
+                if (!surface[i].Texture)
+                    metallic = mat.GetFloat("_Metallic");
+                surface[i].Tint = new Color(mat.GetFloat("_Smoothness"), metallic, 0, 0);
+
+                if (surface[i].Texture)
+                {
+                    pixels[1] += surface[i].Texture.width * surface[i].Texture.height;
+                }
+                else
+                    pixels[1] += 1;
+                emission[i].Texture = mat.GetTexture("_EmissionMap") as Texture2D;
+                emission[i].Tint = mat.GetColor("_EmissionColor");
+                if (emission[i].Texture)
+                {
+                    pixels[2] += emission[i].Texture.width * emission[i].Texture.height;
+                }
+                else
+                    pixels[2] += 1;
+            }
+            else
+            {
+                albedo[i].Texture = null;
+                albedo[i].Tint = Color.magenta;
+                surface[i].Texture = null;
+                surface[i].Tint = new Color(0.5f, 0.5f, 0, 0);
+                emission[i].Texture = null;
+                emission[i].Tint = Color.black;
+                pixels[0]++;
+                pixels[1]++;
+                pixels[2]++;
+            }
+        }
+
+        SDFComputeJob computeJob = new SDFComputeJob()
+        {
+            Vertices = triangleArray,
+            Voxels = voxels
+        };
+
+        var handle = computeJob.Schedule(voxels.Length, 32);
+
+        triangleArray.Dispose();
+        voxels.Dispose();
+    }
+
+    bool IsPowerOfTwo(int x)
+    {
+        return (x & (x - 1)) == 0;
     }
 
     private void CreateSDF()
