@@ -111,9 +111,9 @@ public class SDF : EditorWindow
         }
 
         var bounds = mesh.bounds;
-        var ceilSize = new Vector3(Mathf.Ceil(bounds.size.x), Mathf.Ceil(bounds.size.y), Mathf.Ceil(bounds.size.z));
+        var ceilSize = new Vector3Int(Mathf.CeilToInt(bounds.size.x), Mathf.CeilToInt(bounds.size.y), Mathf.CeilToInt(bounds.size.z));
         var dimension = ceilSize * resolution;
-
+        var dimensionJob = new int3(dimension.x, dimension.y, dimension.z);
         // Get an array of triangles from the mesh.
         Vector3[] meshVertices = mesh.vertices;
         int[] meshTriangles = mesh.triangles;
@@ -152,7 +152,7 @@ public class SDF : EditorWindow
             triangleArray[t] = data;
         }
 
-        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>((int)dimension.x * (int)dimension.y * (int)dimension.z, Allocator.TempJob);
+        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(dimension.x * dimension.y * dimension.z, Allocator.TempJob);
 
         var mats = mr.sharedMaterials;
         TextureInfo[] albedo = new TextureInfo[mesh.subMeshCount];
@@ -210,13 +210,51 @@ public class SDF : EditorWindow
         SDFComputeJob computeJob = new SDFComputeJob()
         {
             Vertices = triangleArray,
-            Voxels = voxels
+            Voxels = voxels,
+            Dimension = dimensionJob,
+            BoundSize = bounds.size,
+            Resolution = resolution,
+            AlbedoMap = ConvertTexture(albedo, pixels[0]),
+            SurfaceMap = ConvertTexture(surface, pixels[1]),
+            EmissionMap = ConvertTexture(emission, pixels[2])
         };
 
         var handle = computeJob.Schedule(voxels.Length, 32);
 
-        triangleArray.Dispose();
-        voxels.Dispose();
+
+        handle.Complete();
+        computeJob.DisposeNativeArrays();
+    }
+
+    NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels)
+    {
+        NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.TempJob);
+        int curOffset = 0;
+        for(int i = 0; i < info.Length; i++)
+        {
+            var tex = info[i].Texture;
+            if (tex)
+            {
+                var path = AssetDatabase.GetAssetPath(tex);
+                TextureImporter ti = AssetImporter.GetAtPath(path) as TextureImporter;
+                if(!ti.isReadable)
+                {
+                    ti.isReadable = true;
+                    ti.SaveAndReimport();
+                }
+                var colors = tex.GetPixels();
+                for (int j = 0; j < colors.Length; j++)
+                {
+                    result[curOffset + j] = (Vector4)colors[j];
+                }
+                curOffset += colors.Length;
+            }
+            else
+            {
+                result[curOffset++] = (Vector4)info[i].Tint;
+            }
+        }
+        return result;
     }
 
     bool IsPowerOfTwo(int x)

@@ -43,4 +43,12 @@ public struct SDFComputeJob : IJobParallelFor
         return new int3(x, y, z);
     }
 
+
+    public void DisposeNativeArrays()
+    {
+        Vertices.Dispose();
+        Voxels.Dispose();
+        AlbedoMap.Dispose();
+        SurfaceMap.Dispose();
+    }
 }
