@@ -161,6 +161,7 @@ public class SDF : EditorWindow
             data.a = meshVertices[meshTriangles[index + 0]] - bounds.center;
             data.b = meshVertices[meshTriangles[index + 1]] - bounds.center;
             data.c = meshVertices[meshTriangles[index + 2]] - bounds.center;
+            data.normal = math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 0]]) / 3);
             //data.normal = normals[t];
             //data.uv = uvs[t];
             data.subMeshIdx = submeshIdx;

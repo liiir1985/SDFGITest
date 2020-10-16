@@ -59,7 +59,8 @@ namespace SDFGenerator
                         Material mat = Instantiate(mr.sharedMaterial);
 
                         float dRatio = 2f / resolusion;
-                        mat.SetColor("_BaseColor", new Color(1, 0, 1, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
+                        float3 normal = math.saturate(((float4)data.NormalSDF).xyz + 1f / 2);
+                        mat.SetColor("_BaseColor", new Color(normal.x, normal.y, normal.z, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
                         mr.material = mat;
 
                         int3 pos2 = To3D(index, dimension);
