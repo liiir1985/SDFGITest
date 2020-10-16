@@ -109,7 +109,7 @@ public class SDF : EditorWindow
     private unsafe void CreateSDFJob()
     {
         // Prompt the user to save the file.
-        string path = EditorUtility.SaveFilePanelInProject("Save As", mesh.name + "_SDF", "asset", "");
+        string path = EditorUtility.SaveFilePanelInProject("Save As", mesh.name + "_SDF", "bytes", "");
 
         // ... If they hit cancel.
         if (path == null || path.Equals(""))
@@ -245,6 +245,7 @@ public class SDF : EditorWindow
         {
             if (sdfJobHandle.IsCompleted)
             {
+                sdfJobHandle.Complete();
                 var voxels = sdfJob.Voxels;
                 using (System.IO.FileStream fs = new System.IO.FileStream(sdfPath, System.IO.FileMode.Create))
                 {
@@ -272,10 +273,9 @@ public class SDF : EditorWindow
                         }
                     }
                 }
+                sdfJob.DisposeNativeArrays();
+                pendingSDFJob = false;
             }
-            sdfJobHandle.Complete();
-            sdfJob.DisposeNativeArrays();
-            pendingSDFJob = false;
         }
     }
 
