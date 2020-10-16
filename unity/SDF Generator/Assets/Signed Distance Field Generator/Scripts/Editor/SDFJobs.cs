@@ -15,13 +15,18 @@ public struct SDFComputeJob : IJobParallelForBatch
 {
     [ReadOnly]
     public NativeArray<TriangleData> Triangles;
+    [ReadOnly]
+    public NativeArray<float2> UVs;
     public NativeArray<SDFVoxel> Voxels;
     [ReadOnly]
     public NativeArray<float4> AlbedoMap;
+    int2 AlbedoSize;
     [ReadOnly]
     public NativeArray<float4> SurfaceMap;
+    int2 SurfaceSize;
     [ReadOnly]
     public NativeArray<float4> EmissionMap;
+    int2 EmissionSize;
 
     public int Resolution;
     public int3 Dimension;
@@ -35,6 +40,13 @@ public struct SDFComputeJob : IJobParallelForBatch
             float3 modelPos = uv * BoundSize;
 
             var d = FindNearesTriangle(modelPos, out var t);
+            var barycentric = ProjectPointOnTriangle(modelPos, ref t);
+            var uv2 = UVs[t.vertIdx.x] * barycentric.x + UVs[t.vertIdx.y] * barycentric.y + UVs[t.vertIdx.z] * barycentric.z;
+            var color = tex2d(AlbedoMap, uv2, AlbedoSize);
+            var surface = tex2d(SurfaceMap, uv2, SurfaceSize);
+            var emission = tex2d(EmissionMap, uv2, EmissionSize);
+
+            var albedoRough = new float4(color.x, color.y, color.z, surface.x);
 
             float s = (IntersectionCount(modelPos, new float3(0, 1, 0)) % 2 == 0) ? 1 : -1;
 
@@ -42,6 +54,34 @@ public struct SDFComputeJob : IJobParallelForBatch
             voxel.NormalSDF = new half4((half3)t.normal, (half)(s * d));
             Voxels[index] = voxel;
         }
+    }
+
+    float4 tex2d(NativeArray<float4> tex, float2 uv, int2 size)
+    {
+        uv = math.frac(uv);
+
+        var uv_img = uv * size;
+        var uv0 = math.floor(uv_img);
+        var uv1 = uv0 + 1;
+
+        var cuv0 = math.lerp(tex[(int)(uv0.y * size.x + uv0.x)], tex[(int)(uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
+        var cuv1 = math.lerp(tex[(int)(uv1.y * size.x + uv0.x)], tex[(int)(uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
+        var cFinal = math.lerp(cuv0, cuv1, uv_img.y - uv0.y);
+        return cFinal;
+    }
+
+    float3 ProjectPointOnTriangle(float3 pos, ref TriangleData tri)
+    {
+        var u = tri.b - tri.a;
+        var v = tri.c - tri.a;
+        var n = math.cross(u, v);
+        var w = pos - tri.a;
+        float3 res = new float3();
+        res.z = math.dot(math.cross(u, w), n) / dot2(n);
+        res.y = math.dot(math.cross(w, v), n) / dot2(n);
+        res.x = 1 - res.y - res.z;
+
+        return res;
     }
 
     float FindNearesTriangle(float3 position, out TriangleData tri)
@@ -163,5 +203,6 @@ public struct SDFComputeJob : IJobParallelForBatch
         AlbedoMap.Dispose();
         SurfaceMap.Dispose();
         EmissionMap.Dispose();
+        UVs.Dispose();
     }
 }

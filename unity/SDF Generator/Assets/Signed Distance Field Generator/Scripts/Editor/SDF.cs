@@ -141,6 +141,11 @@ public class SDF : EditorWindow
             var submesh = mesh.GetSubMesh(i);
             indexStarts[i] = submesh.indexStart;
         }
+        NativeArray<float2> uvArray = new NativeArray<float2>(uvs.Length, Allocator.Persistent);
+        for(int i = 0; i < uvs.Length; i++)
+        {
+            uvArray[i] = uvs[i];
+        }
         NativeArray<TriangleData> triangleArray = new NativeArray<TriangleData>(meshTriangles.Length / 3, Allocator.Persistent);
         int submeshIdx = -1;
         int curStart = indexStarts[0];
@@ -161,7 +166,8 @@ public class SDF : EditorWindow
             data.a = meshVertices[meshTriangles[index + 0]] - bounds.center;
             data.b = meshVertices[meshTriangles[index + 1]] - bounds.center;
             data.c = meshVertices[meshTriangles[index + 2]] - bounds.center;
-            data.normal = math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 0]]) / 3);
+            data.vertIdx = new int3(meshTriangles[index + 0], meshTriangles[index + 1], meshTriangles[index + 2]);
+            data.normal = math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 1]] + normals[meshTriangles[index + 2]]) / 3);
             //data.normal = normals[t];
             //data.uv = uvs[t];
             data.subMeshIdx = submeshIdx;
@@ -227,12 +233,13 @@ public class SDF : EditorWindow
         sdfJob = new SDFComputeJob()
         {
             Triangles = triangleArray,
+            UVs = uvArray,
             Voxels = voxels,
             Dimension = dimensionJob,
             BoundSize = bounds.size,
             Resolution = resolution,
             AlbedoMap = ConvertTexture(albedo, pixels[0]),
-            SurfaceMap = ConvertTexture(surface, pixels[1]),
+            SurfaceMap = ConvertTexture(surface, pixels[1], (c) => new Vector4(c.y, c.w, 0, 0)),
             EmissionMap = ConvertTexture(emission, pixels[2])
         };
 
@@ -282,7 +289,7 @@ public class SDF : EditorWindow
         }
     }
 
-    NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels)
+    NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels, System.Func<Vector4,Vector4> conv = null)
     {
         NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.Persistent);
         int curOffset = 0;
@@ -301,7 +308,7 @@ public class SDF : EditorWindow
                 var colors = tex.GetPixels();
                 for (int j = 0; j < colors.Length; j++)
                 {
-                    result[curOffset + j] = (Vector4)colors[j];
+                    result[curOffset + j] = Vector4.Scale(conv != null ? conv(colors[i]) : (Vector4)colors[j], info[i].Tint);
                 }
                 curOffset += colors.Length;
             }

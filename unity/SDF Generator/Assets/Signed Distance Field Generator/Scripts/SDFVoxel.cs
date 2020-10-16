@@ -22,5 +22,6 @@ public struct TriangleData
     public float3 c;
     public float2 uv;
     public float3 normal;
+    public int3 vertIdx;
     public int subMeshIdx;
 }
