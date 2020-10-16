@@ -125,8 +125,10 @@ public class SDF : EditorWindow
         }
 
         var bounds = mesh.bounds;
-        var ceilSize = new Vector3Int(Mathf.CeilToInt(bounds.size.x), Mathf.CeilToInt(bounds.size.y), Mathf.CeilToInt(bounds.size.z));
-        var dimension = ceilSize * resolution;
+        bounds.size += Vector3.one * 0.125f;
+        var size = bounds.size * resolution;
+        var ceilSize = new Vector3Int(Mathf.CeilToInt(size.x), Mathf.CeilToInt(size.y), Mathf.CeilToInt(size.z));
+        var dimension = ceilSize;
         var dimensionJob = new int3(dimension.x, dimension.y, dimension.z);
         // Get an array of triangles from the mesh.
         Vector3[] meshVertices = mesh.vertices;

@@ -31,11 +31,11 @@ namespace SDFGenerator
                     voxels[i] = *v;
                 }
             }
-            for (int z = 0; z <= dimension.z; z += 8)
+            for (int z = 0; z <= dimension.z; z += 4)
             {
-                for (int y = 0; y <= dimension.y; y += 8)
+                for (int y = 0; y <= dimension.y; y += 4)
                 {
-                    for (int x = 0; x <= dimension.x; x += 8)
+                    for (int x = 0; x <= dimension.x; x += 4)
                     {
                         x = Mathf.Min(x, dimension.x - 1);
                         y = Mathf.Min(y, dimension.y - 1);
