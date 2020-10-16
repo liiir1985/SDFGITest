@@ -102,9 +102,23 @@ public class SDF : EditorWindow
         Repaint();
     }
 
-    private void CreateSDFJob()
+    bool pendingSDFJob;
+    SDFComputeJob sdfJob;
+    JobHandle sdfJobHandle;
+    string sdfPath;
+    private unsafe void CreateSDFJob()
     {
-        if(!IsPowerOfTwo(resolution))
+        // Prompt the user to save the file.
+        string path = EditorUtility.SaveFilePanelInProject("Save As", mesh.name + "_SDF", "asset", "");
+
+        // ... If they hit cancel.
+        if (path == null || path.Equals(""))
+        {
+            return;
+        }
+
+        sdfPath = path;
+        if (!IsPowerOfTwo(resolution))
         {
             Debug.LogError("Resolution is not power of 2");
             return;
@@ -125,7 +139,7 @@ public class SDF : EditorWindow
             var submesh = mesh.GetSubMesh(i);
             indexStarts[i] = submesh.indexStart;
         }
-        NativeArray<TriangleData> triangleArray = new NativeArray<TriangleData>(meshTriangles.Length / 3, Allocator.TempJob);
+        NativeArray<TriangleData> triangleArray = new NativeArray<TriangleData>(meshTriangles.Length / 3, Allocator.Persistent);
         int submeshIdx = -1;
         int curStart = indexStarts[0];
         for (int t = 0; t < triangleArray.Length; t++)
@@ -152,7 +166,7 @@ public class SDF : EditorWindow
             triangleArray[t] = data;
         }
 
-        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(dimension.x * dimension.y * dimension.z, Allocator.TempJob);
+        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(dimension.x * dimension.y * dimension.z, Allocator.Persistent);
 
         var mats = mr.sharedMaterials;
         TextureInfo[] albedo = new TextureInfo[mesh.subMeshCount];
@@ -206,8 +220,8 @@ public class SDF : EditorWindow
                 pixels[2]++;
             }
         }
-
-        SDFComputeJob computeJob = new SDFComputeJob()
+        pendingSDFJob = true;
+        sdfJob = new SDFComputeJob()
         {
             Triangles = triangleArray,
             Voxels = voxels,
@@ -219,16 +233,55 @@ public class SDF : EditorWindow
             EmissionMap = ConvertTexture(emission, pixels[2])
         };
 
-        var handle = computeJob.Schedule(voxels.Length, 32);
+        sdfJobHandle = sdfJob.ScheduleBatch(voxels.Length, 128);
 
 
-        handle.Complete();
-        computeJob.DisposeNativeArrays();
+        
+    }
+
+    private unsafe void Update()
+    {
+        if (pendingSDFJob)
+        {
+            if (sdfJobHandle.IsCompleted)
+            {
+                var voxels = sdfJob.Voxels;
+                using (System.IO.FileStream fs = new System.IO.FileStream(sdfPath, System.IO.FileMode.Create))
+                {
+                    using (System.IO.BinaryWriter bw = new System.IO.BinaryWriter(fs))
+                    {
+                        bw.Write(0xAFFEAFFE);
+                        bw.Write(resolution);
+                        bw.Write(sdfJob.Dimension.x);
+                        bw.Write(sdfJob.Dimension.y);
+                        bw.Write(sdfJob.Dimension.z);
+                        bw.Write(sdfJob.BoundSize.x);
+                        bw.Write(sdfJob.BoundSize.y);
+                        bw.Write(sdfJob.BoundSize.z);
+
+                        var vSize = sizeof(SDFVoxel);
+                        byte[] buffer = new byte[vSize];
+                        fixed (byte* ptr = buffer)
+                        {
+                            SDFVoxel* v = (SDFVoxel*)ptr;
+                            for (int i = 0; i < voxels.Length; i++)
+                            {
+                                *v = voxels[i];
+                                bw.Write(buffer);
+                            }
+                        }
+                    }
+                }
+            }
+            sdfJobHandle.Complete();
+            sdfJob.DisposeNativeArrays();
+            pendingSDFJob = false;
+        }
     }
 
     NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels)
     {
-        NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.TempJob);
+        NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.Persistent);
         int curOffset = 0;
         for(int i = 0; i < info.Length; i++)
         {
@@ -290,6 +343,7 @@ public class SDF : EditorWindow
 
     private Texture3D ComputeSDF()
     {
+        UnityEngine.Profiling.Profiler.BeginSample("SDF Compute");
         // Create the voxel texture.
         Texture3D voxels = new Texture3D(resolution, resolution, resolution, TextureFormat.RGBAHalf, false);
         voxels.anisoLevel = 1;
@@ -354,7 +408,7 @@ public class SDF : EditorWindow
         pixelBuffer.Release();
         voxels.SetPixels(pixelArray, 0);
         voxels.Apply();
-
+        UnityEngine.Profiling.Profiler.EndSample();
         // Return the voxels texture.
         return voxels;
     }

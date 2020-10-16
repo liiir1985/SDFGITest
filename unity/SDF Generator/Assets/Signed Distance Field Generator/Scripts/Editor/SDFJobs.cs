@@ -11,7 +11,7 @@ using Unity.Burst;
 using Unity.Collections;
 
 [BurstCompile]
-public struct SDFComputeJob : IJobParallelFor
+public struct SDFComputeJob : IJobParallelForBatch
 {
     [ReadOnly]
     public NativeArray<TriangleData> Triangles;
@@ -26,22 +26,25 @@ public struct SDFComputeJob : IJobParallelFor
     public int Resolution;
     public int3 Dimension;
     public float3 BoundSize;
-    public void Execute(int index)
+    public void Execute(int startIndex, int count)
     {
-        int3 pos = To3D(index);
-        float3 uv = ((float3)(Dimension - pos) / Dimension) / 2f - 0.5f;
-        float3 modelPos = uv * BoundSize;
+        for (int index = startIndex; index < startIndex + count; index++)
+        {
+            int3 pos = To3D(index);
+            float3 uv = ((float3)(Dimension - pos) / Dimension) / 2f - 0.5f;
+            float3 modelPos = uv * BoundSize;
 
-        var (t, d) = FindNearesTriangle(modelPos);
+            var d = FindNearesTriangle(modelPos, out var t);
 
-        float s = (IntersectionCount(modelPos, new float3(0, 1, 0)) % 2 == 0) ? 1 : -1;
+            float s = (IntersectionCount(modelPos, new float3(0, 1, 0)) % 2 == 0) ? 1 : -1;
 
-        SDFVoxel voxel = new SDFVoxel();
-        voxel.NormalSDF = new half4((half3)t.normal, (half)(s * d));
-        Voxels[index] = voxel;
+            SDFVoxel voxel = new SDFVoxel();
+            voxel.NormalSDF = new half4((half3)t.normal, (half)(s * d));
+            Voxels[index] = voxel;
+        }
     }
 
-    (TriangleData, float) FindNearesTriangle(float3 position)
+    float FindNearesTriangle(float3 position, out TriangleData tri)
     {
         int id = 0;
         float d = float.MaxValue;
@@ -54,7 +57,8 @@ public struct SDFComputeJob : IJobParallelFor
                 d = curD;
             }
         }
-        return (Triangles[id], d);
+        tri = Triangles[id];
+        return d;
     }
     float dot2(float3 v)
     {

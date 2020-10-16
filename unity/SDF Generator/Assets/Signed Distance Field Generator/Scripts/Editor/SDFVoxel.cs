@@ -6,6 +6,7 @@
 using UnityEngine;
 using UnityEditor;
 using Unity.Mathematics;
+using System.Runtime.InteropServices;
 public struct SDFVoxel
 {
     public half4 NormalSDF;
@@ -13,6 +14,7 @@ public struct SDFVoxel
     public half4 EmissionMetallic;
 }
 
+[StructLayout(LayoutKind.Sequential)]
 public struct TriangleData
 {
     public float3 a;
