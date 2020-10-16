@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+using Unity.Mathematics;
+
 namespace SDFGenerator
 {  
     public class SDFVisualizer : MonoBehaviour
@@ -15,7 +17,7 @@ namespace SDFGenerator
             System.IO.BinaryReader br = new System.IO.BinaryReader(ms);
             br.ReadInt32();
             int resolusion = br.ReadInt32();
-            Vector3Int dimension = new Vector3Int(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());
+            int3 dimension = new int3(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());
             Vector3 size = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
             SDFVoxel[] voxels = new SDFVoxel[dimension.x * dimension.y * dimension.z];
             var vSize = sizeof(SDFVoxel);
@@ -57,13 +59,30 @@ namespace SDFGenerator
                         Material mat = Instantiate(mr.sharedMaterial);
 
                         float dRatio = 2f / resolusion;
-                        mat.SetColor("_BaseColor", new Color(0, 0, 0, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
+                        mat.SetColor("_BaseColor", new Color(1, 0, 1, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
                         mr.material = mat;
+
+                        int3 pos2 = To3D(index, dimension);
+                        float3 uv2 = ((float3)pos2 / dimension) - 0.5f;
+                        float3 modelPos = uv2 * size;
+
+                        if(((Vector3)modelPos - pos).magnitude > 0.001f)
+                        {
+                            Debug.Log("?????");
+                        }
                     }
                 }
             }
         }
-
+        int3 To3D(int id, int3 Dimension)
+        {
+            int xQ = id / Dimension.x;
+            int x = id % Dimension.x;
+            int yQ = xQ / Dimension.y;
+            int y = xQ % Dimension.y;
+            int z = yQ % Dimension.z;
+            return new int3(x, y, z);
+        }
         // Update is called once per frame
         void Update()
         {

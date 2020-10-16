@@ -31,7 +31,7 @@ public struct SDFComputeJob : IJobParallelForBatch
         for (int index = startIndex; index < startIndex + count; index++)
         {
             int3 pos = To3D(index);
-            float3 uv = ((float3)(Dimension - pos) / Dimension) / 2f - 0.5f;
+            float3 uv = ((float3)pos / Dimension) - 0.5f;
             float3 modelPos = uv * BoundSize;
 
             var d = FindNearesTriangle(modelPos, out var t);
@@ -94,7 +94,7 @@ public struct SDFComputeJob : IJobParallelForBatch
         int xQ = id / Dimension.x;
         int x = id % Dimension.x;
         int yQ = xQ / Dimension.y;
-        int y = xQ / Dimension.y;
+        int y = xQ % Dimension.y;
         int z = yQ % Dimension.z;
         return new int3(x, y, z);
     }
