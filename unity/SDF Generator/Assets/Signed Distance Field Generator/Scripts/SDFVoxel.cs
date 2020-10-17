@@ -25,3 +25,9 @@ public struct TriangleData
     public int3 vertIdx;
     public int subMeshIdx;
 }
+
+public struct SDFTextureInfo
+{
+    public int2 Size;
+    public int DataOffset;
+}

@@ -20,13 +20,16 @@ public struct SDFComputeJob : IJobParallelForBatch
     public NativeArray<SDFVoxel> Voxels;
     [ReadOnly]
     public NativeArray<float4> AlbedoMap;
-    int2 AlbedoSize;
+    [ReadOnly]
+    public NativeArray<SDFTextureInfo> AlbedoInfo;
     [ReadOnly]
     public NativeArray<float4> SurfaceMap;
-    int2 SurfaceSize;
+    [ReadOnly]
+    public NativeArray<SDFTextureInfo> SurfaceInfo;
     [ReadOnly]
     public NativeArray<float4> EmissionMap;
-    int2 EmissionSize;
+    [ReadOnly]
+    public NativeArray<SDFTextureInfo> EmissionInfo;
 
     public int Resolution;
     public int3 Dimension;
@@ -42,30 +45,37 @@ public struct SDFComputeJob : IJobParallelForBatch
             var d = FindNearesTriangle(modelPos, out var t);
             var barycentric = ProjectPointOnTriangle(modelPos, ref t);
             var uv2 = UVs[t.vertIdx.x] * barycentric.x + UVs[t.vertIdx.y] * barycentric.y + UVs[t.vertIdx.z] * barycentric.z;
-            var color = tex2d(AlbedoMap, uv2, AlbedoSize);
-            var surface = tex2d(SurfaceMap, uv2, SurfaceSize);
-            var emission = tex2d(EmissionMap, uv2, EmissionSize);
+            var color = tex2d(AlbedoMap, uv2, AlbedoInfo[t.subMeshIdx]);
+            var surface = tex2d(SurfaceMap, uv2, SurfaceInfo[t.subMeshIdx]);
+            var emission = tex2d(EmissionMap, uv2, EmissionInfo[t.subMeshIdx]);
 
             var albedoRough = new float4(color.x, color.y, color.z, surface.x);
+            var emissionMetallic = new float4(emission.x, emission.y, emission.z, surface.y);
 
             float s = (IntersectionCount(modelPos, new float3(0, 1, 0)) % 2 == 0) ? 1 : -1;
 
             SDFVoxel voxel = new SDFVoxel();
             voxel.NormalSDF = new half4((half3)t.normal, (half)(s * d));
+            voxel.SurfaceAlbedoRough = (half4)albedoRough;
+            voxel.EmissionMetallic = (half4)emissionMetallic;
             Voxels[index] = voxel;
         }
     }
 
-    float4 tex2d(NativeArray<float4> tex, float2 uv, int2 size)
+    float4 tex2d(NativeArray<float4> tex, float2 uv, SDFTextureInfo tinfo)
     {
+        var size = tinfo.Size;
+        var maxSize = size - 1;
+        var offset = tinfo.DataOffset;
         uv = math.frac(uv);
 
         var uv_img = uv * size;
-        var uv0 = math.floor(uv_img);
-        var uv1 = uv0 + 1;
+        var uv0 = math.clamp(math.floor(uv_img),int2.zero, maxSize);
+        var uv1 = math.clamp(uv0 + 1, int2.zero, maxSize);
+        
 
-        var cuv0 = math.lerp(tex[(int)(uv0.y * size.x + uv0.x)], tex[(int)(uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
-        var cuv1 = math.lerp(tex[(int)(uv1.y * size.x + uv0.x)], tex[(int)(uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
+        var cuv0 = math.lerp(tex[offset + (int)(uv0.y * size.x + uv0.x)], tex[offset + (int)(uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
+        var cuv1 = math.lerp(tex[offset + (int)(uv1.y * size.x + uv0.x)], tex[offset + (int)(uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
         var cFinal = math.lerp(cuv0, cuv1, uv_img.y - uv0.y);
         return cFinal;
     }

@@ -10,6 +10,7 @@ namespace SDFGenerator
     {
         public TextAsset sdfAsset;
         public GameObject Cube;
+        public int resolution = 4;
         // Start is called before the first frame update
         unsafe void Start()
         {
@@ -31,11 +32,11 @@ namespace SDFGenerator
                     voxels[i] = *v;
                 }
             }
-            for (int z = 0; z <= dimension.z; z += 4)
+            for (int z = 0; z <= dimension.z; z += resolution)
             {
-                for (int y = 0; y <= dimension.y; y += 4)
+                for (int y = 0; y <= dimension.y; y += resolution)
                 {
-                    for (int x = 0; x <= dimension.x; x += 4)
+                    for (int x = 0; x <= dimension.x; x += resolution)
                     {
                         x = Mathf.Min(x, dimension.x - 1);
                         y = Mathf.Min(y, dimension.y - 1);
@@ -60,7 +61,8 @@ namespace SDFGenerator
 
                         float dRatio = 2f / resolusion;
                         float3 normal = math.saturate(((float4)data.NormalSDF).xyz + 1f / 2);
-                        mat.SetColor("_BaseColor", new Color(normal.x, normal.y, normal.z, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
+                        float3 albedoRough = math.saturate(((float4)data.SurfaceAlbedoRough).xyz + 1f / 2);
+                        mat.SetColor("_BaseColor", new Color(albedoRough.x, albedoRough.y, albedoRough.z, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
                         mr.material = mat;
 
                         int3 pos2 = To3D(index, dimension);

@@ -102,10 +102,6 @@ public class SDF : EditorWindow
         Repaint();
     }
 
-    bool pendingSDFJob;
-    SDFComputeJob sdfJob;
-    JobHandle sdfJobHandle;
-    string sdfPath;
     private unsafe void CreateSDFJob()
     {
         // Prompt the user to save the file.
@@ -117,7 +113,6 @@ public class SDF : EditorWindow
             return;
         }
 
-        sdfPath = path;
         if (!IsPowerOfTwo(resolution))
         {
             Debug.LogError("Resolution is not power of 2");
@@ -141,12 +136,12 @@ public class SDF : EditorWindow
             var submesh = mesh.GetSubMesh(i);
             indexStarts[i] = submesh.indexStart;
         }
-        NativeArray<float2> uvArray = new NativeArray<float2>(uvs.Length, Allocator.Persistent);
+        NativeArray<float2> uvArray = new NativeArray<float2>(uvs.Length, Allocator.TempJob);
         for(int i = 0; i < uvs.Length; i++)
         {
             uvArray[i] = uvs[i];
         }
-        NativeArray<TriangleData> triangleArray = new NativeArray<TriangleData>(meshTriangles.Length / 3, Allocator.Persistent);
+        NativeArray<TriangleData> triangleArray = new NativeArray<TriangleData>(meshTriangles.Length / 3, Allocator.TempJob);
         int submeshIdx = -1;
         int curStart = indexStarts[0];
         for (int t = 0; t < triangleArray.Length; t++)
@@ -175,12 +170,16 @@ public class SDF : EditorWindow
             triangleArray[t] = data;
         }
 
-        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(dimension.x * dimension.y * dimension.z, Allocator.Persistent);
+        NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(dimension.x * dimension.y * dimension.z, Allocator.TempJob);
 
         var mats = mr.sharedMaterials;
         TextureInfo[] albedo = new TextureInfo[mesh.subMeshCount];
         TextureInfo[] surface = new TextureInfo[mesh.subMeshCount];
         TextureInfo[] emission = new TextureInfo[mesh.subMeshCount];
+        NativeArray<SDFTextureInfo> albedoInfo = new NativeArray<SDFTextureInfo>(mesh.subMeshCount, Allocator.TempJob);
+        NativeArray<SDFTextureInfo> surfaceInfo = new NativeArray<SDFTextureInfo>(mesh.subMeshCount, Allocator.TempJob);
+        NativeArray<SDFTextureInfo> emissionInfo = new NativeArray<SDFTextureInfo>(mesh.subMeshCount, Allocator.TempJob);
+
         int[] pixels = new int[3];
         for(int i = 0; i < mesh.subMeshCount; i++)
         {
@@ -229,8 +228,7 @@ public class SDF : EditorWindow
                 pixels[2]++;
             }
         }
-        pendingSDFJob = true;
-        sdfJob = new SDFComputeJob()
+        var sdfJob = new SDFComputeJob()
         {
             Triangles = triangleArray,
             UVs = uvArray,
@@ -238,69 +236,63 @@ public class SDF : EditorWindow
             Dimension = dimensionJob,
             BoundSize = bounds.size,
             Resolution = resolution,
-            AlbedoMap = ConvertTexture(albedo, pixels[0]),
-            SurfaceMap = ConvertTexture(surface, pixels[1], (c) => new Vector4(c.y, c.w, 0, 0)),
-            EmissionMap = ConvertTexture(emission, pixels[2])
+            AlbedoMap = ConvertTexture(albedo, pixels[0], albedoInfo, true),
+            AlbedoInfo = albedoInfo,
+            SurfaceMap = ConvertTexture(surface, pixels[1], surfaceInfo, false, (c) => new Vector4(c.y, c.w, 0, 0)),
+            SurfaceInfo = surfaceInfo,
+            EmissionMap = ConvertTexture(emission, pixels[2], emissionInfo, true),
+            EmissionInfo = emissionInfo
         };
 
-        sdfJobHandle = sdfJob.ScheduleBatch(voxels.Length, 128);
+        var sdfJobHandle = sdfJob.ScheduleBatch(voxels.Length, 128);
 
+        sdfJobHandle.Complete();
 
-        
-    }
-
-    private unsafe void Update()
-    {
-        if (pendingSDFJob)
+        using (System.IO.FileStream fs = new System.IO.FileStream(path, System.IO.FileMode.Create))
         {
-            if (sdfJobHandle.IsCompleted)
+            using (System.IO.BinaryWriter bw = new System.IO.BinaryWriter(fs))
             {
-                sdfJobHandle.Complete();
-                var voxels = sdfJob.Voxels;
-                using (System.IO.FileStream fs = new System.IO.FileStream(sdfPath, System.IO.FileMode.Create))
-                {
-                    using (System.IO.BinaryWriter bw = new System.IO.BinaryWriter(fs))
-                    {
-                        bw.Write(0xAFFEAFFE);
-                        bw.Write(resolution);
-                        bw.Write(sdfJob.Dimension.x);
-                        bw.Write(sdfJob.Dimension.y);
-                        bw.Write(sdfJob.Dimension.z);
-                        bw.Write(sdfJob.BoundSize.x);
-                        bw.Write(sdfJob.BoundSize.y);
-                        bw.Write(sdfJob.BoundSize.z);
+                bw.Write(0xAFFEAFFE);
+                bw.Write(resolution);
+                bw.Write(sdfJob.Dimension.x);
+                bw.Write(sdfJob.Dimension.y);
+                bw.Write(sdfJob.Dimension.z);
+                bw.Write(sdfJob.BoundSize.x);
+                bw.Write(sdfJob.BoundSize.y);
+                bw.Write(sdfJob.BoundSize.z);
 
-                        var vSize = sizeof(SDFVoxel);
-                        byte[] buffer = new byte[vSize];
-                        fixed (byte* ptr = buffer)
-                        {
-                            SDFVoxel* v = (SDFVoxel*)ptr;
-                            for (int i = 0; i < voxels.Length; i++)
-                            {
-                                *v = voxels[i];
-                                bw.Write(buffer);
-                            }
-                        }
+                var vSize = sizeof(SDFVoxel);
+                byte[] buffer = new byte[vSize];
+                fixed (byte* ptr = buffer)
+                {
+                    SDFVoxel* v = (SDFVoxel*)ptr;
+                    for (int i = 0; i < voxels.Length; i++)
+                    {
+                        *v = voxels[i];
+                        bw.Write(buffer);
                     }
                 }
-                sdfJob.DisposeNativeArrays();
-                pendingSDFJob = false;
             }
         }
+        sdfJob.DisposeNativeArrays();
+
     }
 
-    NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels, System.Func<Vector4,Vector4> conv = null)
+    NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels, NativeArray<SDFTextureInfo> tInfos, bool sRGB, System.Func<Vector4, Vector4> conv = null)
     {
-        NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.Persistent);
+        NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.TempJob);
         int curOffset = 0;
-        for(int i = 0; i < info.Length; i++)
+        for (int i = 0; i < info.Length; i++)
         {
             var tex = info[i].Texture;
+            SDFTextureInfo tInfo = new SDFTextureInfo();
+            tInfo.DataOffset = curOffset;
             if (tex)
             {
+                tInfo.Size = new int2(tex.width, tex.height);
                 var path = AssetDatabase.GetAssetPath(tex);
                 TextureImporter ti = AssetImporter.GetAtPath(path) as TextureImporter;
-                if(!ti.isReadable)
+                if (!ti.isReadable)
                 {
                     ti.isReadable = true;
                     ti.SaveAndReimport();
@@ -308,14 +300,17 @@ public class SDF : EditorWindow
                 var colors = tex.GetPixels();
                 for (int j = 0; j < colors.Length; j++)
                 {
-                    result[curOffset + j] = Vector4.Scale(conv != null ? conv(colors[i]) : (Vector4)colors[j], info[i].Tint);
+                    var c = sRGB ? colors[j].linear : colors[j];
+                    result[curOffset + j] = Vector4.Scale(conv != null ? conv(c) : (Vector4)c, info[i].Tint);
                 }
                 curOffset += colors.Length;
             }
             else
             {
+                tInfo.Size = new int2(1.1);
                 result[curOffset++] = (Vector4)info[i].Tint;
             }
+            tInfos[i] = tInfo;
         }
         return result;
     }
