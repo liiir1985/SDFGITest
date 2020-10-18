@@ -122,10 +122,43 @@ namespace SDFGenerator
         {
             return math.dot(v, v);
         }
+
+        bool IsZeroOne(float a)
+        {
+            return a >= 0 && a <= 1;
+        }
+        float point_segment_distance(ref float3 x0, ref float3 x1, ref float3 x2)
+        {
+            float3 dx = (x2 - x1);
+            double m2 = math.lengthsq(dx);
+            // find parameter value of closest point on segment
+            float s12 = (float)(math.dot(x2 - x0, dx) / m2);
+            if (s12 < 0)
+            {
+                s12 = 0;
+            }
+            else if (s12 > 1)
+            {
+                s12 = 1;
+            }
+            // and find the distance
+            return math.distance(x0, s12 * x1 + (1 - s12) * x2);
+        }
+
         float DistanceToTriangle(float3 position, int triangleId)
         {
             TriangleData triangle = Triangles[triangleId];
-            float3 ba = triangle.b - triangle.a;
+            var barycentric = ProjectPointOnTriangle(position, ref triangle);
+            if(IsZeroOne(barycentric.x) && IsZeroOne(barycentric.y) && IsZeroOne(barycentric.z))
+            {
+                return math.length(position - (triangle.a * barycentric.x + triangle.b * barycentric.y + triangle.c * barycentric.z));
+            }
+            else
+            {
+                return math.min(math.min(point_segment_distance(ref position, ref triangle.a, ref triangle.b), point_segment_distance(ref position, ref triangle.a, ref triangle.c)),
+                    point_segment_distance(ref position, ref triangle.a, ref triangle.c));
+            }
+            /*float3 ba = triangle.b - triangle.a;
             float3 cb = triangle.c - triangle.b;
             float3 ac = triangle.a - triangle.c;
             float3 pa = position - triangle.a;
@@ -144,7 +177,7 @@ namespace SDFGenerator
             else
             {
                 return math.sqrt(math.dot(nor, pa) * math.dot(nor, pa) / dot2(nor));
-            }
+            }*/
         }
 
         int3 To3D(int id)
