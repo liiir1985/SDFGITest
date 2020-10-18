@@ -37,30 +37,35 @@ namespace SDFGenerator
         public int Resolution;
         public int3 Dimension;
         public float3 BoundSize;
+
+        public void CalculateVoxel(ref SDFVoxel voxel, int index, out TriangleData t)
+        {
+            int3 pos = To3D(index);
+            float3 uv = ((float3)pos / Dimension) - 0.5f;
+            float3 modelPos = uv * BoundSize;
+
+            var d = FindNearesTriangle(modelPos, out t);
+            var barycentric = ProjectPointOnTriangle(modelPos, ref t);
+            var uv2 = UVs[t.vertIdx.x] * barycentric.x + UVs[t.vertIdx.y] * barycentric.y + UVs[t.vertIdx.z] * barycentric.z;
+            var color = tex2d(AlbedoMap, uv2, AlbedoInfo[t.subMeshIdx]);
+            var surface = tex2d(SurfaceMap, uv2, SurfaceInfo[t.subMeshIdx]);
+            var emission = tex2d(EmissionMap, uv2, EmissionInfo[t.subMeshIdx]);
+
+            var albedoRough = new float4(color.x, color.y, color.z, surface.x);
+            var emissionMetallic = new float4(emission.x, emission.y, emission.z, surface.y);
+
+            float s = (IntersectionCount(modelPos, new float3(0, 1, 0)) % 2 == 0) ? 1 : -1;
+
+            voxel.NormalSDF = new half4((half3)t.normal, (half)(s * d));
+            voxel.SurfaceAlbedoRough = (half4)albedoRough;
+            voxel.EmissionMetallic = (half4)emissionMetallic;
+        }
         public void Execute(int startIndex, int count)
         {
             for (int index = startIndex; index < startIndex + count; index++)
             {
-                int3 pos = To3D(index);
-                float3 uv = ((float3)pos / Dimension) - 0.5f;
-                float3 modelPos = uv * BoundSize;
-
-                var d = FindNearesTriangle(modelPos, out var t);
-                var barycentric = ProjectPointOnTriangle(modelPos, ref t);
-                var uv2 = UVs[t.vertIdx.x] * barycentric.x + UVs[t.vertIdx.y] * barycentric.y + UVs[t.vertIdx.z] * barycentric.z;
-                var color = tex2d(AlbedoMap, uv2, AlbedoInfo[t.subMeshIdx]);
-                var surface = tex2d(SurfaceMap, uv2, SurfaceInfo[t.subMeshIdx]);
-                var emission = tex2d(EmissionMap, uv2, EmissionInfo[t.subMeshIdx]);
-
-                var albedoRough = new float4(color.x, color.y, color.z, surface.x);
-                var emissionMetallic = new float4(emission.x, emission.y, emission.z, surface.y);
-
-                float s = (IntersectionCount(modelPos, new float3(0, 1, 0)) % 2 == 0) ? 1 : -1;
-
                 SDFVoxel voxel = new SDFVoxel();
-                voxel.NormalSDF = new half4((half3)t.normal, (half)(s * d));
-                voxel.SurfaceAlbedoRough = (half4)albedoRough;
-                voxel.EmissionMetallic = (half4)emissionMetallic;
+                CalculateVoxel(ref voxel, index, out _);
                 Voxels[index] = voxel;
             }
         }

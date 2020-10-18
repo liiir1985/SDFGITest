@@ -28,7 +28,7 @@ namespace SDFGenerator
             this.mesh = mesh;
         }
 
-        public void Generate(int resolution, out NativeArray<SDFVoxel> voxels, out int3 sdfDimension, out float3 sdfBounds)
+        SDFComputeJob InitializeJob(int resolution, out NativeArray<SDFVoxel> voxels)
         {
             var bounds = mesh.bounds;
             bounds.size += Vector3.one * 0.125f;
@@ -155,8 +155,26 @@ namespace SDFGenerator
                 EmissionInfo = emissionInfo
             };
 
-            sdfDimension = dimensionJob;
-            sdfBounds = bounds.size;
+            return sdfJob;
+        }
+
+        public (SDFVoxel, TriangleData) CalculateVoxel(int resolution, float3 modelPos)
+        {
+            var sdfJob = InitializeJob(resolution, out var voxels);
+            var uv = modelPos / sdfJob.BoundSize + 0.5f;
+            var pos = uv * sdfJob.Dimension;
+            int index = (int)(pos.z * sdfJob.Dimension.y * sdfJob.Dimension.x + pos.y * sdfJob.Dimension.x + pos.x);
+            SDFVoxel voxel = new SDFVoxel();
+            sdfJob.CalculateVoxel(ref voxel, index, out var t);
+            voxels.Dispose();
+            return (voxel, t);
+        }
+
+        public void Generate(int resolution, out NativeArray<SDFVoxel> voxels, out int3 sdfDimension, out float3 sdfBounds)
+        {
+            var sdfJob = InitializeJob(resolution, out voxels);
+            sdfDimension = sdfJob.Dimension;
+            sdfBounds = sdfJob.BoundSize;
             var sdfJobHandle = sdfJob.ScheduleBatch(voxels.Length, 128);
 
             sdfJobHandle.Complete();

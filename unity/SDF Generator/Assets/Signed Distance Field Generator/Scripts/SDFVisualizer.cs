@@ -10,8 +10,8 @@ namespace SDFGenerator
     {
         public TextAsset sdfAsset;
         public GameObject Cube;
+        public MeshRenderer meshRenderer;
         public int resolution = 4;
-        // Start is called before the first frame update
         unsafe void Start()
         {
             System.IO.MemoryStream ms = new System.IO.MemoryStream(sdfAsset.bytes);
@@ -59,11 +59,16 @@ namespace SDFGenerator
                         var mr = go.GetComponent<MeshRenderer>();
                         Material mat = Instantiate(mr.sharedMaterial);
 
-                        float dRatio = 2f / resolusion;
+                        float dRatio = 4f / resolusion;
                         float3 normal = math.saturate(((float4)data.NormalSDF).xyz + 1f / 2);
                         float3 albedoRough = math.saturate(((float4)data.SurfaceAlbedoRough).xyz + 1f / 2);
                         mat.SetColor("_BaseColor", new Color(albedoRough.x, albedoRough.y, albedoRough.z, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
                         mr.material = mat;
+
+                        var voxelObj = go.AddComponent<SDFVoxelObject>();
+                        voxelObj.Resolution = resolusion;
+                        voxelObj.Coordinate = new Vector3Int(x, y, z);
+                        voxelObj.meshRenderer = meshRenderer;
 
                         int3 pos2 = To3D(index, dimension);
                         float3 uv2 = ((float3)pos2 / dimension) - 0.5f;
@@ -85,11 +90,6 @@ namespace SDFGenerator
             int y = xQ % Dimension.y;
             int z = yQ % Dimension.z;
             return new int3(x, y, z);
-        }
-        // Update is called once per frame
-        void Update()
-        {
-
         }
     }
 
