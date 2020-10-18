@@ -116,6 +116,7 @@ public class SDF : EditorWindow
         }
 
         Generator gen = new Generator(mr, mesh);
+        var center = mesh.bounds.center;
         gen.Generate(resolution, out var voxels, out var dimension, out var bounds);
 
         using (System.IO.FileStream fs = new System.IO.FileStream(path, System.IO.FileMode.Create))
@@ -127,6 +128,9 @@ public class SDF : EditorWindow
                 bw.Write(dimension.x);
                 bw.Write(dimension.y);
                 bw.Write(dimension.z);
+                bw.Write(center.x);
+                bw.Write(center.y);
+                bw.Write(center.z);
                 bw.Write(bounds.x);
                 bw.Write(bounds.y);
                 bw.Write(bounds.z);

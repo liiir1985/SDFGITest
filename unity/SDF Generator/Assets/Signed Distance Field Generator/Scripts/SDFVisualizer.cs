@@ -19,6 +19,7 @@ namespace SDFGenerator
             br.ReadInt32();
             int resolusion = br.ReadInt32();
             int3 dimension = new int3(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());
+            Vector3 center = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
             Vector3 size = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
             SDFVoxel[] voxels = new SDFVoxel[dimension.x * dimension.y * dimension.z];
             var vSize = sizeof(SDFVoxel);
@@ -54,7 +55,7 @@ namespace SDFGenerator
                         go.name = $"{x}_{y}_{z}";
                         var t = go.transform;
                         t.SetParent(transform);
-                        t.localPosition = pos;
+                        t.localPosition = pos + center;
                         t.localScale = Vector3.one * (1f / resolusion);
                         var mr = go.GetComponent<MeshRenderer>();
                         Material mat = Instantiate(mr.sharedMaterial);
