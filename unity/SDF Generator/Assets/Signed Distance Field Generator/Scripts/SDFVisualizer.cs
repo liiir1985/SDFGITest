@@ -61,7 +61,7 @@ namespace SDFGenerator
 
                         float dRatio = 4f / resolusion;
                         float3 normal = math.saturate(((float4)data.NormalSDF).xyz + 1f / 2);
-                        float3 albedoRough = math.saturate(((float4)data.SurfaceAlbedoRough).xyz + 1f / 2);
+                        float3 albedoRough = math.saturate(((float4)data.SurfaceAlbedoRough).xyz);
                         mat.SetColor("_BaseColor", new Color(albedoRough.x, albedoRough.y, albedoRough.z, Mathf.Clamp01(1 - data.NormalSDF.w / dRatio)));
                         mr.material = mat;
 

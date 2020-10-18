@@ -147,11 +147,11 @@ namespace SDFGenerator
                 Dimension = dimensionJob,
                 BoundSize = bounds.size,
                 Resolution = resolution,
-                AlbedoMap = ConvertTexture(albedo, pixels[0], albedoInfo, true),
+                AlbedoMap = ConvertTexture(albedo, pixels[0], albedoInfo),
                 AlbedoInfo = albedoInfo,
-                SurfaceMap = ConvertTexture(surface, pixels[1], surfaceInfo, false, (c) => new Vector4(c.y, c.w, 0, 0)),
+                SurfaceMap = ConvertTexture(surface, pixels[1], surfaceInfo, (c) => new Vector4(c.y, c.w, 0, 0)),
                 SurfaceInfo = surfaceInfo,
-                EmissionMap = ConvertTexture(emission, pixels[2], emissionInfo, true),
+                EmissionMap = ConvertTexture(emission, pixels[2], emissionInfo),
                 EmissionInfo = emissionInfo
             };
 
@@ -181,7 +181,7 @@ namespace SDFGenerator
             sdfJob.DisposeNativeArrays();
         }
 
-        NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels, NativeArray<SDFTextureInfo> tInfos, bool sRGB, System.Func<Vector4, Vector4> conv = null)
+        NativeArray<float4> ConvertTexture(TextureInfo[] info, int pixels, NativeArray<SDFTextureInfo> tInfos, System.Func<Vector4, Vector4> conv = null)
         {
             NativeArray<float4> result = new NativeArray<float4>(pixels, Allocator.TempJob);
             int curOffset = 0;
@@ -203,7 +203,7 @@ namespace SDFGenerator
                     var colors = tex.GetPixels();
                     for (int j = 0; j < colors.Length; j++)
                     {
-                        var c = sRGB ? colors[j].linear : colors[j];
+                        var c = colors[j];
                         result[curOffset + j] = Vector4.Scale(conv != null ? conv(c) : (Vector4)c, info[i].Tint);
                     }
                     curOffset += colors.Length;
