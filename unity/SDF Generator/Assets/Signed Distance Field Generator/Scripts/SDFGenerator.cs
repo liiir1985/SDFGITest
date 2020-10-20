@@ -14,12 +14,6 @@ namespace SDFGenerator
 {
     public class Generator
     {
-        struct TextureInfo
-        {
-            public Texture2D Texture;
-            public Color Tint;
-        }
-
         Mesh mesh;
         MeshRenderer mr;
         public Generator(MeshRenderer mr, Mesh mesh)
