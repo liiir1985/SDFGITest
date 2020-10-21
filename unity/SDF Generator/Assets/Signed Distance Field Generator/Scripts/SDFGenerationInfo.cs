@@ -115,6 +115,8 @@ namespace SDFGenerator
         int totalSurfacePixels;
         int totalEmissionPixels;
         Bounds bounds;
+
+        public Bounds Bounds => bounds;
         public SDFGenerationInfo(GameObject go)
         {
             var renderers = go.GetComponentsInChildren<MeshRenderer>();
@@ -196,11 +198,11 @@ namespace SDFGenerator
                     //data.normal = normals[t];
                     //data.uv = uvs[t];
                     data.subMeshIdx = submeshIdx + mesh.SubmeshOffset;
-                    ConvertTexture(mesh.Albedo, albedoMap, albedoInfo, ref albedoOffset, mesh.SubmeshOffset);
-                    ConvertTexture(mesh.Surface, surfaceMap, surfaceInfo, ref surfaceOffset, mesh.SubmeshOffset, (c) => new Vector4(c.y, c.w, 0, 0));
-                    ConvertTexture(mesh.Emission, emissionMap, emissionInfo, ref emissionOffset, mesh.SubmeshOffset);
                     triangleArray[triangleOffset + t] = data;
                 }
+                ConvertTexture(mesh.Albedo, albedoMap, albedoInfo, ref albedoOffset, mesh.SubmeshOffset);
+                ConvertTexture(mesh.Surface, surfaceMap, surfaceInfo, ref surfaceOffset, mesh.SubmeshOffset, (c) => new Vector4(c.y, c.w, 0, 0));
+                ConvertTexture(mesh.Emission, emissionMap, emissionInfo, ref emissionOffset, mesh.SubmeshOffset);
 
                 triangleOffset += mesh.TriangleCount;
                 verticesOffset += mesh.Vertices.Length;

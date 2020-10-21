@@ -29,8 +29,8 @@ namespace SDFGenerator
                 if (!calculated)
                 {
                     Mesh mesh = meshRenderer.GetComponent<MeshFilter>().sharedMesh;
-                    Generator gen = new Generator(meshRenderer, mesh);
-                    (voxel, triangel) = gen.CalculateVoxel(Resolution, transform.localPosition);
+                    //Generator gen = new Generator(meshRenderer, mesh);
+                    //(voxel, triangel) = gen.CalculateVoxel(Resolution, transform.localPosition);
                     calculated = true;
                 }
             }

@@ -14,7 +14,7 @@ using SDFGenerator;
 public class SDF : EditorWindow
 {
     Mesh mesh;
-    MeshRenderer mr;
+    GameObject go;
     int subMeshIndex = 0;
     float padding = 0f;
     int resolution = 32;
@@ -51,9 +51,9 @@ public class SDF : EditorWindow
 
         // Assign the mesh.
         mesh = EditorGUILayout.ObjectField("Mesh", mesh, typeof(Mesh), false) as Mesh;
-        mr = EditorGUILayout.ObjectField("Mesh Renderer", mr, typeof(MeshRenderer), true) as MeshRenderer;
+        go = EditorGUILayout.ObjectField("GameObject", go, typeof(GameObject), true) as GameObject;
         // If the mesh is null, don't draw the rest of the GUI.
-        if (mesh == null && mr == null)
+        if (mesh == null && go == null)
         {
             if (GUILayout.Button("Close"))
             {
@@ -62,13 +62,8 @@ public class SDF : EditorWindow
 
             return;
         }
-        if (mr)
-        {
-            var mf = mr.GetComponent<MeshFilter>();
-            mesh = mf.sharedMesh;
-        }
         // Assign the sub-mesh index, if there are more than 1 in the mesh.
-        if (mesh.subMeshCount > 1)
+        if (mesh && mesh.subMeshCount > 1)
         {
             subMeshIndex = (int)Mathf.Max(EditorGUILayout.IntField("Submesh Index", subMeshIndex), 0f);
         }
@@ -81,7 +76,7 @@ public class SDF : EditorWindow
 
         if (GUILayout.Button("Create"))
         {
-            if (mr)
+            if (go)
                 CreateSDFJob();
             else
                 CreateSDF();
@@ -101,7 +96,7 @@ public class SDF : EditorWindow
     private unsafe void CreateSDFJob()
     {
         // Prompt the user to save the file.
-        string path = EditorUtility.SaveFilePanelInProject("Save As", mesh.name + "_SDF", "bytes", "");
+        string path = EditorUtility.SaveFilePanelInProject("Save As", go.name + "_SDF", "bytes", "");
 
         // ... If they hit cancel.
         if (path == null || path.Equals(""))
@@ -115,8 +110,8 @@ public class SDF : EditorWindow
             return;
         }
 
-        Generator gen = new Generator(mr, mesh);
-        var center = mesh.bounds.center;
+        Generator gen = new Generator(go);
+        var center = gen.Bounds.center;
         gen.Generate(resolution, out var voxels, out var dimension, out var bounds);
 
         using (System.IO.FileStream fs = new System.IO.FileStream(path, System.IO.FileMode.Create))
