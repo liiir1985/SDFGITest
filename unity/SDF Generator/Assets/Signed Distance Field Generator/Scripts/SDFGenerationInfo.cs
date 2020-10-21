@@ -121,7 +121,7 @@ namespace SDFGenerator
 
         public Bounds Bounds => bounds;
 
-        void EncapsulateBounds(ref Bounds bounds, Matrix4x4 local2world, Bounds meshBounds)
+        void EncapsulateBounds(ref Bounds bounds,ref Matrix4x4 local2world, Bounds meshBounds)
         {
             bounds.Encapsulate(AABB.Transform(local2world, meshBounds.ToAABB()).ToBounds());
         }
@@ -141,7 +141,7 @@ namespace SDFGenerator
                 {
                     var mesh = filter.sharedMesh;
                     var local2world = baseWorld2Local * filter.transform.localToWorldMatrix;
-                    EncapsulateBounds(ref bounds, local2world, mesh.bounds);
+                    EncapsulateBounds(ref bounds, ref local2world, mesh.bounds);
                     meshes[i] = new SDFMesh(mesh, mats);
                     meshes[i].Local2World = local2world;
                     meshes[i].SubmeshOffset = submeshOffset;
@@ -156,13 +156,13 @@ namespace SDFGenerator
             }
         }
 
-        Vector3 TransformPoint(Vector3 p, Matrix4x4 local2world)
+        Vector3 TransformPoint(Vector3 p, ref Matrix4x4 local2world)
         {
             Vector4 v = new Vector4(p.x, p.y, p.z, 1);
             return local2world * v;
         }
 
-        Vector3 TransformNormal(Vector3 p, Matrix4x4 local2world)
+        Vector3 TransformNormal(Vector3 p, ref Matrix4x4 local2world)
         {
             Vector4 v = new Vector4(p.x, p.y, p.z, 0);
             return local2world * v;
@@ -213,12 +213,12 @@ namespace SDFGenerator
                         else
                             curStart = meshTriangles.Length;
                     }
-                    data.a = TransformPoint(meshVertices[meshTriangles[index + 0]], mesh.Local2World) - bounds.center;
-                    data.b = TransformPoint(meshVertices[meshTriangles[index + 1]], mesh.Local2World) - bounds.center;
-                    data.c = TransformPoint(meshVertices[meshTriangles[index + 2]], mesh.Local2World) - bounds.center;
+                    data.a = TransformPoint(meshVertices[meshTriangles[index + 0]],ref mesh.Local2World) - bounds.center;
+                    data.b = TransformPoint(meshVertices[meshTriangles[index + 1]],ref mesh.Local2World) - bounds.center;
+                    data.c = TransformPoint(meshVertices[meshTriangles[index + 2]],ref mesh.Local2World) - bounds.center;
                     data.vertIdx = new int3(meshTriangles[index + 0], meshTriangles[index + 1], meshTriangles[index + 2]);
                     data.vertIdx += verticesOffset;
-                    data.normal = TransformNormal(math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 1]] + normals[meshTriangles[index + 2]]) / 3), mesh.Local2World);
+                    data.normal = TransformNormal(math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 1]] + normals[meshTriangles[index + 2]]) / 3), ref mesh.Local2World);
                     //data.normal = normals[t];
                     //data.uv = uvs[t];
                     data.subMeshIdx = submeshIdx + mesh.SubmeshOffset;
