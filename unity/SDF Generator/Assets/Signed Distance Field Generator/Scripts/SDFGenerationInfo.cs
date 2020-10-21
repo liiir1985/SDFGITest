@@ -34,6 +34,7 @@ namespace SDFGenerator
         public int SurfacePixels;
         public int EmissionPixels;
         public int SubmeshOffset;
+        public Matrix4x4 Local2World;
 
         public SDFMesh(Mesh mesh, Material[] mats)
         {
@@ -56,6 +57,7 @@ namespace SDFGenerator
             SurfacePixels = 0;
             EmissionPixels = 0;
             SubmeshOffset = 0;
+            Local2World = Matrix4x4.identity;
             for (int i = 0; i < mesh.subMeshCount; i++)
             {
                 if (i < mats.Length)
@@ -115,10 +117,18 @@ namespace SDFGenerator
         int totalSurfacePixels;
         int totalEmissionPixels;
         Bounds bounds;
+        Matrix4x4 baseWorld2Local;
 
         public Bounds Bounds => bounds;
+
+        void EncapsulateBounds(ref Bounds bounds, Matrix4x4 local2world, Bounds meshBounds)
+        {
+            bounds.Encapsulate(AABB.Transform(local2world, meshBounds.ToAABB()).ToBounds());
+        }
+
         public SDFGenerationInfo(GameObject go)
         {
+            baseWorld2Local = go.transform.worldToLocalMatrix;
             var renderers = go.GetComponentsInChildren<MeshRenderer>();
             meshes = new SDFMesh[renderers.Length];
             bounds = new Bounds();
@@ -130,8 +140,10 @@ namespace SDFGenerator
                 if (filter)
                 {
                     var mesh = filter.sharedMesh;
-                    bounds.Encapsulate(mesh.bounds);
+                    var local2world = baseWorld2Local * filter.transform.localToWorldMatrix;
+                    EncapsulateBounds(ref bounds, local2world, mesh.bounds);
                     meshes[i] = new SDFMesh(mesh, mats);
+                    meshes[i].Local2World = local2world;
                     meshes[i].SubmeshOffset = submeshOffset;
                     totalSubmeshes += meshes[i].SubMeshCount;
                     totalTriangles += (meshes[i].TriangleCount);
@@ -142,6 +154,18 @@ namespace SDFGenerator
                     submeshOffset += meshes[i].SubMeshCount;
                 }
             }
+        }
+
+        Vector3 TransformPoint(Vector3 p, Matrix4x4 local2world)
+        {
+            Vector4 v = new Vector4(p.x, p.y, p.z, 1);
+            return local2world * v;
+        }
+
+        Vector3 TransformNormal(Vector3 p, Matrix4x4 local2world)
+        {
+            Vector4 v = new Vector4(p.x, p.y, p.z, 0);
+            return local2world * v;
         }
 
         public void InitializeJob(ref SDFComputeJob job)
@@ -189,12 +213,12 @@ namespace SDFGenerator
                         else
                             curStart = meshTriangles.Length;
                     }
-                    data.a = meshVertices[meshTriangles[index + 0]] - bounds.center;
-                    data.b = meshVertices[meshTriangles[index + 1]] - bounds.center;
-                    data.c = meshVertices[meshTriangles[index + 2]] - bounds.center;
+                    data.a = TransformPoint(meshVertices[meshTriangles[index + 0]], mesh.Local2World) - bounds.center;
+                    data.b = TransformPoint(meshVertices[meshTriangles[index + 1]], mesh.Local2World) - bounds.center;
+                    data.c = TransformPoint(meshVertices[meshTriangles[index + 2]], mesh.Local2World) - bounds.center;
                     data.vertIdx = new int3(meshTriangles[index + 0], meshTriangles[index + 1], meshTriangles[index + 2]);
                     data.vertIdx += verticesOffset;
-                    data.normal = math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 1]] + normals[meshTriangles[index + 2]]) / 3);
+                    data.normal = TransformNormal(math.normalize((normals[meshTriangles[index + 0]] + normals[meshTriangles[index + 1]] + normals[meshTriangles[index + 2]]) / 3), mesh.Local2World);
                     //data.normal = normals[t];
                     //data.uv = uvs[t];
                     data.subMeshIdx = submeshIdx + mesh.SubmeshOffset;
