@@ -5,3 +5,4 @@ Temp/
 *.csproj
 *.sln
 obj/
+unity/SDF Generator/Packages/packages-lock.json

@@ -34,7 +34,9 @@ namespace SDFGenerator
                     resolution = EditorGUILayout.IntField("Resolution", resolution);
                     if (GUILayout.Button("Bake"))
                     {
-                        var path = Bake(baker.gameObject);
+                        var oldAsset = sdfData.objectReferenceValue as TextAsset;
+                        string path = oldAsset ? AssetDatabase.GetAssetPath(oldAsset) : null;
+                        path = Bake(baker.gameObject, path);
                         if (!string.IsNullOrEmpty(path))
                         {
                             var data = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
@@ -46,23 +48,25 @@ namespace SDFGenerator
             serializedObject.ApplyModifiedProperties();
         }
 
-        unsafe string Bake(GameObject go)
+        unsafe string Bake(GameObject go, string path)
         {
             Generator gen = new Generator(go);
             var dimension = gen.GetDimension(resolution);
             var vSize = sizeof(SDFVoxel);
             var pixels = dimension.x * dimension.y * dimension.z;
-            if (EditorUtility.DisplayDialog("Confirm", $"The generated SDF Data will be at ({dimension.x}x{dimension.y}x{dimension.z}),\n the file size will be {(pixels * vSize) / 1024f / 1024f: 0.#}MB, continue?", "OK", "Cancel"))
+            if (EditorUtility.DisplayDialog("Confirm", $"The generated SDF Data will be at ({dimension.x}x{dimension.y}x{dimension.z}),\n the file size will be {(pixels * vSize) / 1024f / 1024f: 0.##}MB, continue?", "OK", "Cancel"))
             {
-                string folder = System.IO.Path.GetDirectoryName(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
-                string path = EditorUtility.SaveFilePanelInProject("Save As", go.name + "_SDF", "bytes", "", folder);
-
-                // ... If they hit cancel.
-                if (path == null || path.Equals(""))
+                if (string.IsNullOrEmpty(path))
                 {
-                    return null;
-                }
+                    string folder = System.IO.Path.GetDirectoryName(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+                    path = EditorUtility.SaveFilePanelInProject("Save As", go.name + "_SDF", "bytes", "", folder);
 
+                    // ... If they hit cancel.
+                    if (path == null || path.Equals(""))
+                    {
+                        return null;
+                    }
+                }
                 var center = gen.Bounds.center;
                 gen.Generate(resolution, out var voxels, out dimension, out var bounds);
 

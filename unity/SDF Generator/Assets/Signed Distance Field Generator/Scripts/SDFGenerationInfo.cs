@@ -4,6 +4,7 @@
 //
 
 using UnityEngine;
+using System.Collections.Generic;
 using UnityEditor;
 using Unity.Mathematics;
 using System.Runtime.InteropServices;
@@ -109,7 +110,7 @@ namespace SDFGenerator
     }
     public class SDFGenerationInfo
     {
-        SDFMesh[] meshes;
+        List<SDFMesh> meshes;
         int totalSubmeshes;
         int totalTriangles;
         int totalVertices;
@@ -130,11 +131,30 @@ namespace SDFGenerator
         {
             baseWorld2Local = go.transform.worldToLocalMatrix;
             var renderers = go.GetComponentsInChildren<MeshRenderer>();
-            meshes = new SDFMesh[renderers.Length];
+            var lods = go.GetComponentsInChildren<LODGroup>();
+            HashSet<MeshRenderer> invalidRenderers = new HashSet<MeshRenderer>();
+            foreach(var i in lods)
+            {
+                var ls = i.GetLODs();
+                if(ls.Length > 1)
+                {
+                    for (int j = 1; j < ls.Length; j++)
+                    {
+                        foreach (var r in ls[j].renderers)
+                        {
+                            if (r is MeshRenderer mr)
+                                invalidRenderers.Add(mr);
+                        }
+                    }
+                }
+            }
+            meshes = new List<SDFMesh>();
             bounds = new Bounds();
             int submeshOffset = 0;
             for (int i = 0; i < renderers.Length; i++)
             {
+                if (invalidRenderers.Contains(renderers[i]))
+                    continue;
                 var mats = renderers[i].sharedMaterials;
                 var filter = renderers[i].GetComponent<MeshFilter>();
                 if (filter)
@@ -142,16 +162,17 @@ namespace SDFGenerator
                     var mesh = filter.sharedMesh;
                     var local2world = baseWorld2Local * filter.transform.localToWorldMatrix;
                     EncapsulateBounds(ref bounds, ref local2world, mesh.bounds);
-                    meshes[i] = new SDFMesh(mesh, mats);
-                    meshes[i].Local2World = local2world;
-                    meshes[i].SubmeshOffset = submeshOffset;
-                    totalSubmeshes += meshes[i].SubMeshCount;
-                    totalTriangles += (meshes[i].TriangleCount);
-                    totalVertices += meshes[i].Vertices.Length;
-                    totalAlbedoPixels += meshes[i].AlbedoPixels;
-                    totalSurfacePixels += meshes[i].SurfacePixels;
-                    totalEmissionPixels += meshes[i].EmissionPixels;
-                    submeshOffset += meshes[i].SubMeshCount;
+                    var m = new SDFMesh(mesh, mats);
+                    m.Local2World = local2world;
+                    m.SubmeshOffset = submeshOffset;
+                    totalSubmeshes += m.SubMeshCount;
+                    totalTriangles += (m.TriangleCount);
+                    totalVertices += m.Vertices.Length;
+                    totalAlbedoPixels += m.AlbedoPixels;
+                    totalSurfacePixels += m.SurfacePixels;
+                    totalEmissionPixels += m.EmissionPixels;
+                    meshes.Add(m);
+                    submeshOffset += m.SubMeshCount;
                 }
             }
         }
@@ -184,7 +205,7 @@ namespace SDFGenerator
             int surfaceOffset = 0;
             int emissionOffset = 0;
 
-            for (int i = 0; i < meshes.Length; i++)
+            for (int i = 0; i < meshes.Count; i++)
             {
                 var mesh = meshes[i];
                 var uvs = mesh.UVs;
