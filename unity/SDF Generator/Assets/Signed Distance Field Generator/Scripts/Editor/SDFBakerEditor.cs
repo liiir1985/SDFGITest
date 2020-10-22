@@ -15,16 +15,43 @@ namespace SDFGenerator
     public class SDFBakerEditor : Editor
     {
         SerializedProperty sdfData;
+        TextAsset lastSDF;
+        Vector3Int dimension;
+        Vector3 size;
+
         int resolution = 8;
         private void OnEnable()
         {
             sdfData = serializedObject.FindProperty("sdfData");
         }
 
-        public override void OnInspectorGUI()
+        public unsafe override void OnInspectorGUI()
         {
             SDFBaker baker = target as SDFBaker;
+            var oldAsset = sdfData.objectReferenceValue as TextAsset;
             EditorGUILayout.PropertyField(sdfData, new GUIContent("SDF Asset"));
+            if (oldAsset)
+            {
+                using (new GUILayout.VerticalScope(EditorStyles.helpBox))
+                {
+                    if (lastSDF != oldAsset)
+                    {
+                        System.IO.MemoryStream ms = new System.IO.MemoryStream(oldAsset.bytes);
+                        System.IO.BinaryReader br = new System.IO.BinaryReader(ms);
+                        br.ReadInt32();
+                        int resolusion = br.ReadInt32();
+                        dimension = new Vector3Int(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());
+                        var center = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
+                        size = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
+                        lastSDF = oldAsset;
+                    }
+                    EditorGUILayout.Vector3IntField("Dimension", dimension);
+                    EditorGUILayout.Vector3Field("Size", size);
+                    var vSize = sizeof(SDFVoxel);
+                    var pixels = dimension.x * dimension.y * dimension.z;
+                    EditorGUILayout.LabelField($"File Size:{(pixels * vSize) / 1024f / 1024f: 0.###}MB");
+                }
+            }
             EditorGUILayout.Separator();
             if (baker)
             {
@@ -34,7 +61,6 @@ namespace SDFGenerator
                     resolution = EditorGUILayout.IntField("Resolution", resolution);
                     if (GUILayout.Button("Bake"))
                     {
-                        var oldAsset = sdfData.objectReferenceValue as TextAsset;
                         string path = oldAsset ? AssetDatabase.GetAssetPath(oldAsset) : null;
                         path = Bake(baker.gameObject, path);
                         if (!string.IsNullOrEmpty(path))
