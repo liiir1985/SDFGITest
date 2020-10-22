@@ -251,8 +251,11 @@ namespace SDFGenerator
         {
             Triangles.Dispose();
             AlbedoMap.Dispose();
+            AlbedoInfo.Dispose();
             SurfaceMap.Dispose();
+            SurfaceInfo.Dispose();
             EmissionMap.Dispose();
+            EmissionInfo.Dispose();
             UVs.Dispose();
         }
     }
