@@ -22,6 +22,18 @@ namespace SDFGenerator
             info = new SDFGenerationInfo(go);
         }
 
+        public int3 GetDimension(int resolution)
+        {
+            var bounds = info.Bounds;
+            bounds.size += Vector3.one * 0.125f;
+            var size = bounds.size * resolution;
+            var ceilSize = new Vector3Int(Mathf.CeilToInt(size.x), Mathf.CeilToInt(size.y), Mathf.CeilToInt(size.z));
+            var dimension = ceilSize;
+            var dimensionJob = new int3(dimension.x, dimension.y, dimension.z);
+            return dimensionJob;
+
+        }
+
         SDFComputeJob InitializeJob(int resolution, out NativeArray<SDFVoxel> voxels)
         {
             var bounds = info.Bounds;
