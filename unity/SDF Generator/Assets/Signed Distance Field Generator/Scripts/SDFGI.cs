@@ -14,15 +14,12 @@ namespace SDFGenerator
 {
     public class SDFGI : MonoBehaviour
     {
-        SDFVolume[] volumes;
+        BVH bvh;
         private void Start()
         {
-            volumes = Object.FindObjectsOfType<SDFVolume>();
-
-            Clustering c = new Clustering();
-            c.Volumes.AddRange(volumes);
-
-            var clusters = c.KMeanClustering(2);
+            var volumes = Object.FindObjectsOfType<SDFVolume>();
+            bvh = new BVH(volumes);
+            bvh.Build();
         }
     }
 }

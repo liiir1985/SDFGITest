@@ -28,7 +28,7 @@ namespace SDFGenerator
 
         public Bounds Bounds => aabb;
 
-        private void Start()
+        private void Awake()
         {
             ReadData();
 
