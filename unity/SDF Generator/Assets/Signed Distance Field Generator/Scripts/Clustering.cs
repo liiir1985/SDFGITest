@@ -8,9 +8,10 @@ namespace SDFGenerator
     class Clustering
     {
 
-        List<TransformData> objs = new List<TransformData>();
+        List<SDFVolume> objs = new List<SDFVolume>();
+        public List<SDFVolume> Volumes => objs;
 
-        Cluster[] KMeanClustering(int k)
+        public Cluster[] KMeanClustering(int k)
         {
             Cluster[] arr = new Cluster[k];
             Vector3 min, max;
@@ -41,7 +42,7 @@ namespace SDFGenerator
                 arr[i].Mean = new Vector3(Random.Range(min.x, max.x), Random.Range(min.y, max.y), Random.Range(min.z, max.z));
             }
 
-            Dictionary<TransformData, int> mapping = new Dictionary<TransformData, int>();
+            Dictionary<SDFVolume, int> mapping = new Dictionary<SDFVolume, int>();
             bool changed = false;
             do
             {
@@ -95,7 +96,7 @@ namespace SDFGenerator
     {
         public Vector3 Mean { get; set; }
 
-        public List<TransformData> Transforms { get; private set; } = new List<TransformData>();
+        public List<SDFVolume> Transforms { get; private set; } = new List<SDFVolume>();
 
         public float TotalDistance
         {
@@ -138,11 +139,5 @@ namespace SDFGenerator
 
             Mean = total / Transforms.Count;
         }
-    }
-
-    class TransformData
-    {
-        public Vector3 Position { get; set; }
-        public Bounds Bounds { get; set; }
     }
 }

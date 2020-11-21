@@ -11,8 +11,8 @@ using Unity.Jobs;
 using Unity.Mathematics;
 namespace SDFGenerator
 {
-    [CustomEditor(typeof(SDFBaker))]
-    public class SDFBakerEditor : Editor
+    [CustomEditor(typeof(SDFVolume))]
+    public class SDFVolumeEditor : Editor
     {
         SerializedProperty sdfData;
         TextAsset lastSDF;
@@ -27,7 +27,7 @@ namespace SDFGenerator
 
         public unsafe override void OnInspectorGUI()
         {
-            SDFBaker baker = target as SDFBaker;
+            SDFVolume baker = target as SDFVolume;
             var oldAsset = sdfData.objectReferenceValue as TextAsset;
             EditorGUILayout.PropertyField(sdfData, new GUIContent("SDF Asset"));
             if (oldAsset)
