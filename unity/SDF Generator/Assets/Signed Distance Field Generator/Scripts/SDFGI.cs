@@ -25,6 +25,7 @@ namespace SDFGenerator
         Texture2D depthTexture;
         [SerializeField]
         Texture2D normalTexture;
+        Texture2D giTexture;
         private void Start()
         {
             var depth = depthTexture.GetPixelData<half4>(0);
@@ -32,6 +33,8 @@ namespace SDFGenerator
             Color32 b = normal[258];
             Color c = new Color(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a - 127) / 127f);
             Color a = new Color(0.4475098f, 0, 0);
+
+            giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, 0, true);
             var volumes = Object.FindObjectsOfType<SDFVolume>();
             bvh = new BVH(volumes);
             bvh.Build();
@@ -67,6 +70,8 @@ namespace SDFGenerator
             voxels.Dispose();
             volumeInfos.Dispose();
             bvhTree.Dispose();
+
+            Destroy(giTexture);
         }
 #if UNITY_EDITOR
         public int GizmoDepth { get; set; }
