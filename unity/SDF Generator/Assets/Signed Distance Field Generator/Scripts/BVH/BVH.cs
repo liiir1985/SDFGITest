@@ -14,8 +14,9 @@ namespace SDFGenerator
     {
         BVHNode root;
         List<SDFVolume> volumes = new List<SDFVolume>();
-
+        List<BVHNode> nodes = new List<BVHNode>();
         public BVHNode Root => root;
+        public List<BVHNode> Nodes => nodes;
 
         public List<SDFVolume> Volumes => volumes;
         public BVH(SDFVolume[] volumes)
@@ -28,9 +29,17 @@ namespace SDFGenerator
             root = new BVHNode();
             root.Volumes.AddRange(volumes);
             root.Build();
+
+            root.Traverse(nodes);
         }
     }
 
+    public struct BVHNodeInfo
+    {
+        public AABB Bounds;
+        public int SDFVolume;
+        public int FailLink;
+    }
     public class BVHNode
     {
         Bounds bounds;
@@ -41,6 +50,9 @@ namespace SDFGenerator
 
         public BVHNode Left => left;
         public BVHNode Right => right;
+
+        public int Index { get; set; }
+        public int FalseLink { get; set; } = int.MaxValue;
 
         public void Build()
         {
@@ -66,6 +78,28 @@ namespace SDFGenerator
                 right = new BVHNode();
                 right.volumes.AddRange(clusters[1].Transforms);
                 right.Build();
+            }
+        }
+
+        public void Traverse(List<BVHNode> nodes)
+        {
+            Index = nodes.Count;
+            nodes.Add(this);
+            if (left != null)
+                left.Traverse(nodes);
+            if (right != null)
+                right.Traverse(nodes);
+
+            if(left != null)
+            {
+                if (right != null)
+                    left.FalseLink = right.Index;
+                else
+                    left.FalseLink = nodes.Count;
+            }
+            if(right != null)
+            {
+                right.FalseLink = nodes.Count;
             }
         }
     }

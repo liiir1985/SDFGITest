@@ -15,11 +15,21 @@ namespace SDFGenerator
     public class SDFGIEditor : Editor
     {
         int curDepth;
+        SerializedProperty depthTexture, normalTexture;
+        private void OnEnable()
+        {
+            depthTexture = serializedObject.FindProperty("depthTexture");
+            normalTexture = serializedObject.FindProperty("normalTexture");
+        }
         public unsafe override void OnInspectorGUI()
         {
             SDFGI sdfgi = target as SDFGI;
             int maxDepth = sdfgi.MaxDepth;
 
+            EditorGUILayout.PropertyField(depthTexture);
+            EditorGUILayout.PropertyField(normalTexture);
+
+            serializedObject.ApplyModifiedProperties();
             curDepth = EditorGUILayout.IntSlider("Draw Depth", curDepth, 0, maxDepth);
             sdfgi.GizmoDepth = curDepth;
         }

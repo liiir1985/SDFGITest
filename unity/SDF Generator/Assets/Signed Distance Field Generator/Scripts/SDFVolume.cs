@@ -15,7 +15,8 @@ namespace SDFGenerator
 {
     public struct SDFVolumeInfo
     {
-        public AABB Bounds;
+        public AABB AABB;
+        public AABB SDFBounds;
         public int3 Dimension;
         public int StartIndex;
     }

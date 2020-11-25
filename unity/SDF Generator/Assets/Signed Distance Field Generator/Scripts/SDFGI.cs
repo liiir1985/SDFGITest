@@ -4,6 +4,7 @@
 //
 
 using UnityEngine;
+using System.Collections.Generic;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -16,34 +17,56 @@ namespace SDFGenerator
     public class SDFGI : MonoBehaviour
     {
         BVH bvh;
+        NativeArray<SDFVoxel> voxels;
+        NativeArray<SDFVolumeInfo> volumeInfos;
+        NativeArray<BVHNodeInfo> bvhTree;
+
+        [SerializeField]
+        Texture2D depthTexture;
+        [SerializeField]
+        Texture2D normalTexture;
         private void Start()
         {
+            var depth = depthTexture.GetPixelData<half4>(0);
+            var normal = normalTexture.GetPixelData<Color32>(0);
+            Color32 b = normal[258];
+            Color c = new Color(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a - 127) / 127f);
+            Color a = new Color(0.4475098f, 0, 0);
             var volumes = Object.FindObjectsOfType<SDFVolume>();
             bvh = new BVH(volumes);
             bvh.Build();
-
             int voxelCnt = 0;
             foreach(var i in bvh.Volumes)
             {
                 var dimension = i.Dimension;
                 voxelCnt += dimension.x * dimension.y * dimension.z;
             }
-            
-            NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(voxelCnt, Allocator.Persistent);
-            NativeArray<SDFVolumeInfo> volumeInfos = new NativeArray<SDFVolumeInfo>(bvh.Volumes.Count, Allocator.Persistent);
-
+            var nodes = bvh.Nodes;
+            Dictionary<SDFVolume, int> indexMapping = new Dictionary<SDFVolume, int>();
+            voxels = new NativeArray<SDFVoxel>(voxelCnt, Allocator.Persistent);
+            volumeInfos = new NativeArray<SDFVolumeInfo>(bvh.Volumes.Count, Allocator.Persistent);
+            bvhTree = new NativeArray<BVHNodeInfo>(nodes.Count, Allocator.Persistent);
             int curIdx = 0;
             for(int i = 0; i < bvh.Volumes.Count; i++)
             {
                 var volume = bvh.Volumes[i];
+                indexMapping[volume] = i;
                 SDFVolumeInfo info = new SDFVolumeInfo();
-                info.Bounds = volume.SDFBounds;
+                info.AABB = volume.Bounds.ToAABB();
+                info.SDFBounds = volume.SDFBounds;
                 info.Dimension = volume.Dimension;
                 info.StartIndex = curIdx;
                 volumeInfos[i] = info;
                 volume.ReadData(voxels, curIdx);
                 curIdx += info.Dimension.x * info.Dimension.y * info.Dimension.z;
             }
+        }
+
+        private void OnDestroy()
+        {
+            voxels.Dispose();
+            volumeInfos.Dispose();
+            bvhTree.Dispose();
         }
 #if UNITY_EDITOR
         public int GizmoDepth { get; set; }
