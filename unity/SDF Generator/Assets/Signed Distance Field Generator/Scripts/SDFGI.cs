@@ -8,6 +8,7 @@ using UnityEngine;
 using UnityEditor;
 #endif
 using Unity.Mathematics;
+using Unity.Collections;
 using System.Runtime.InteropServices;
 
 namespace SDFGenerator
@@ -20,6 +21,29 @@ namespace SDFGenerator
             var volumes = Object.FindObjectsOfType<SDFVolume>();
             bvh = new BVH(volumes);
             bvh.Build();
+
+            int voxelCnt = 0;
+            foreach(var i in bvh.Volumes)
+            {
+                var dimension = i.Dimension;
+                voxelCnt += dimension.x * dimension.y * dimension.z;
+            }
+            
+            NativeArray<SDFVoxel> voxels = new NativeArray<SDFVoxel>(voxelCnt, Allocator.Persistent);
+            NativeArray<SDFVolumeInfo> volumeInfos = new NativeArray<SDFVolumeInfo>(bvh.Volumes.Count, Allocator.Persistent);
+
+            int curIdx = 0;
+            for(int i = 0; i < bvh.Volumes.Count; i++)
+            {
+                var volume = bvh.Volumes[i];
+                SDFVolumeInfo info = new SDFVolumeInfo();
+                info.Bounds = volume.SDFBounds;
+                info.Dimension = volume.Dimension;
+                info.StartIndex = curIdx;
+                volumeInfos[i] = info;
+                volume.ReadData(voxels, curIdx);
+                curIdx += info.Dimension.x * info.Dimension.y * info.Dimension.z;
+            }
         }
 #if UNITY_EDITOR
         public int GizmoDepth { get; set; }

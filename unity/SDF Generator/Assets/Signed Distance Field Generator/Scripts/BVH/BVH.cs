@@ -16,6 +16,8 @@ namespace SDFGenerator
         List<SDFVolume> volumes = new List<SDFVolume>();
 
         public BVHNode Root => root;
+
+        public List<SDFVolume> Volumes => volumes;
         public BVH(SDFVolume[] volumes)
         {
             this.volumes.AddRange(volumes);

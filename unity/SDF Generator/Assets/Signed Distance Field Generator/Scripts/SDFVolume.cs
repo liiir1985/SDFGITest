@@ -4,6 +4,7 @@
 //
 
 using UnityEngine;
+using Unity.Collections;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -12,6 +13,12 @@ using System.Runtime.InteropServices;
 
 namespace SDFGenerator
 {
+    public struct SDFVolumeInfo
+    {
+        public AABB Bounds;
+        public int3 Dimension;
+        public int StartIndex;
+    }
     public class SDFVolume : MonoBehaviour
     {
         [SerializeField]
@@ -19,8 +26,11 @@ namespace SDFGenerator
 
         Vector3 size;
         Vector3 center;
-
+        int3 dimension;
+        AABB sdfBounds;
         Bounds aabb;
+        int resolusion;
+        System.IO.MemoryStream ms;
 
         public Vector3 Position => aabb.center;
 
@@ -28,24 +38,49 @@ namespace SDFGenerator
 
         public Bounds Bounds => aabb;
 
+        public AABB SDFBounds => sdfBounds;
+        public int3 Dimension => dimension;
+
+        public int Resolusion => resolusion;
+
         private void Awake()
         {
-            ReadData();
+            ReadMeta();
 
         }
-        void ReadData()
+        void ReadMeta()
         {
-            System.IO.MemoryStream ms = new System.IO.MemoryStream(sdfData.bytes);
+            ms = new System.IO.MemoryStream(sdfData.bytes);
             System.IO.BinaryReader br = new System.IO.BinaryReader(ms);
             br.ReadInt32();
-            int resolusion = br.ReadInt32();
-            int3 dimension = new int3(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());
+            resolusion = br.ReadInt32();
+            dimension = new int3(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());
             center = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
             size = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
 
             Bounds bounds = new Bounds(center, size);
-            var aabb = AABB.Transform(transform.localToWorldMatrix, bounds.ToAABB());
+            sdfBounds = bounds.ToAABB();
+            var aabb = AABB.Transform(transform.localToWorldMatrix, sdfBounds);
             this.aabb = new Bounds(aabb.Center, aabb.Size);
+        }
+
+        public unsafe void ReadData(NativeArray<SDFVoxel> arr, int index)
+        {
+            ms.Position = 44;
+            int cnt = dimension.x * dimension.y * dimension.z;
+
+            var vSize = sizeof(SDFVoxel);
+            byte[] buffer = new byte[vSize];
+            fixed (byte* ptr = buffer)
+            {
+                SDFVoxel* v = (SDFVoxel*)ptr;
+
+                for (int i = 0; i < cnt; i++)
+                {
+                    ms.Read(buffer, 0, vSize);
+                    arr[index + i] = *v;
+                }
+            }
         }
 #if UNITY_EDITOR
         TextAsset cachedSdfData;
@@ -54,7 +89,7 @@ namespace SDFGenerator
         {
             if (cachedSdfData != sdfData && sdfData)
             {
-                ReadData();
+                ReadMeta();
                 cachedSdfData = sdfData;
             }
             Gizmos.matrix = transform.localToWorldMatrix;
