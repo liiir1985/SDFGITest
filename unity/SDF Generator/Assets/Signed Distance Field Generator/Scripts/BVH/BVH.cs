@@ -38,7 +38,7 @@ namespace SDFGenerator
     {
         public AABB Bounds;
         public int SDFVolume;
-        public int FailLink;
+        public int FalseLink;
     }
     public class BVHNode
     {

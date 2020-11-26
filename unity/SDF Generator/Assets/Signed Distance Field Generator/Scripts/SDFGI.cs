@@ -20,6 +20,8 @@ namespace SDFGenerator
         NativeArray<SDFVoxel> voxels;
         NativeArray<SDFVolumeInfo> volumeInfos;
         NativeArray<BVHNodeInfo> bvhTree;
+        NativeArray<float> depthData;
+        NativeArray<half4> normalData;
 
         [SerializeField]
         Texture2D depthTexture;
@@ -30,9 +32,21 @@ namespace SDFGenerator
         {
             var depth = depthTexture.GetPixelData<half4>(0);
             var normal = normalTexture.GetPixelData<Color32>(0);
-            Color32 b = normal[258];
-            Color c = new Color(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a - 127) / 127f);
-            Color a = new Color(0.4475098f, 0, 0);
+            
+            depthData = new NativeArray<float>(depth.Length, Allocator.Persistent);
+            for(int i = 0; i < depth.Length; i++)
+            {
+                float x = Mathf.GammaToLinearSpace(depth[i].x);
+                depthData[i] = x;
+            }
+            
+            normalData = new NativeArray<half4>(normal.Length, Allocator.Persistent);
+            for(int i = 0; i < normal.Length; i++)
+            {
+                Color32 b = normal[i];
+                float4 c = new float4(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a - 127) / 127f);
+                normalData[i] = (half4)c;
+            }
 
             giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, 0, true);
             var volumes = Object.FindObjectsOfType<SDFVolume>();
@@ -63,6 +77,28 @@ namespace SDFGenerator
                 volume.ReadData(voxels, curIdx);
                 curIdx += info.Dimension.x * info.Dimension.y * info.Dimension.z;
             }
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+                BVHNodeInfo info = new BVHNodeInfo();
+                info.Bounds = node.AABB.ToAABB();
+                if (node.Left == null && node.Right == null)
+                    info.SDFVolume = indexMapping[node.Volumes[0]];
+                else
+                    info.SDFVolume = -1;
+                info.FalseLink = node.FalseLink;
+                bvhTree[i] = info;
+            }
+        }
+
+        public void DoGI()
+        {
+            SDFGIJob job = new SDFGIJob();
+            job.Voxels = voxels;
+            job.VolumeInfos = volumeInfos;
+            job.BVHTree = bvhTree;
+            job.DepthMap = depthData;
         }
 
         private void OnDestroy()

@@ -23,7 +23,7 @@ namespace SDFGenerator
         [ReadOnly]
         public NativeArray<BVHNodeInfo> BVHTree;
         [ReadOnly]
-        public NativeArray<half4> DepthMap;
+        public NativeArray<float> DepthMap;
         [ReadOnly]
         public NativeArray<half4> NormalMap;
         public NativeArray<half4> GIMap;
