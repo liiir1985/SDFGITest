@@ -8,6 +8,7 @@ using System.Collections.Generic;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Collections;
 using System.Runtime.InteropServices;
@@ -29,7 +30,7 @@ namespace SDFGenerator
         Texture2D normalTexture;
         Texture2D giTexture;
         private void Start()
-        {
+        {  
             var depth = depthTexture.GetPixelData<half4>(0);
             var normal = normalTexture.GetPixelData<Color32>(0);
             
@@ -48,7 +49,7 @@ namespace SDFGenerator
                 normalData[i] = (half4)c;
             }
 
-            giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, 0, true);
+            giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, TextureFormat.RGBAHalf, -1, true);
             var volumes = Object.FindObjectsOfType<SDFVolume>();
             bvh = new BVH(volumes);
             bvh.Build();
@@ -94,11 +95,25 @@ namespace SDFGenerator
 
         public void DoGI()
         {
+            var camera = Camera.main;
+            Matrix4x4 viewMat = camera.worldToCameraMatrix;
+            Matrix4x4 projMat = GL.GetGPUProjectionMatrix(camera.projectionMatrix, false);
+            Matrix4x4 viewProjMat = (projMat * viewMat);
             SDFGIJob job = new SDFGIJob();
             job.Voxels = voxels;
             job.VolumeInfos = volumeInfos;
             job.BVHTree = bvhTree;
             job.DepthMap = depthData;
+            job.NormalMap = normalData;
+            job.GIMap = giTexture.GetPixelData<half4>(0);
+            job.GBufferDimension = new int2(normalTexture.width, normalTexture.height);
+            job.ViewProjectionMatrixInv = viewProjMat.inverse;
+            job.Dimension = new int2(giTexture.width, giTexture.height);
+            job.EyePos = camera.transform.position;
+
+            var handle = job.ScheduleBatch(job.GIMap.Length, 256);
+            handle.Complete();
+            giTexture.Apply();
         }
 
         private void OnDestroy()
@@ -106,6 +121,8 @@ namespace SDFGenerator
             voxels.Dispose();
             volumeInfos.Dispose();
             bvhTree.Dispose();
+            depthData.Dispose();
+            normalData.Dispose();
 
             Destroy(giTexture);
         }

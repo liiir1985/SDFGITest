@@ -32,6 +32,11 @@ namespace SDFGenerator
             serializedObject.ApplyModifiedProperties();
             curDepth = EditorGUILayout.IntSlider("Draw Depth", curDepth, 0, maxDepth);
             sdfgi.GizmoDepth = curDepth;
+
+            if(GUILayout.Button("Do GI"))
+            {
+                sdfgi.DoGI();
+            }
         }
     }
 }
