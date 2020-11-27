@@ -22,8 +22,14 @@ namespace SDFGenerator
         NativeArray<SDFVolumeInfo> volumeInfos;
         NativeArray<BVHNodeInfo> bvhTree;
         NativeArray<float> depthData;
-        NativeArray<half4> normalData;
+        NativeArray<float4> normalData;
+        NativeArray<float4> albedoData;
+        NativeArray<float4> metallicData;
 
+        [SerializeField]
+        Texture2D albedoTexture;
+        [SerializeField]
+        Texture2D metallicTexture;
         [SerializeField]
         Texture2D depthTexture;
         [SerializeField]
@@ -32,8 +38,10 @@ namespace SDFGenerator
         private void Start()
         {  
             var depth = depthTexture.GetPixelData<half4>(0);
+            var albedo = albedoTexture.GetPixelData<Color32>(0);
             var normal = normalTexture.GetPixelData<Color32>(0);
-            
+            var metallic = metallicTexture.GetPixelData<Color32>(0);
+
             depthData = new NativeArray<float>(depth.Length, Allocator.Persistent);
             for(int i = 0; i < depth.Length; i++)
             {
@@ -41,12 +49,20 @@ namespace SDFGenerator
                 depthData[i] = x;
             }
             
-            normalData = new NativeArray<half4>(normal.Length, Allocator.Persistent);
+            normalData = new NativeArray<float4>(normal.Length, Allocator.Persistent);
             for(int i = 0; i < normal.Length; i++)
             {
                 Color32 b = normal[i];
                 float4 c = new float4(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a - 127) / 127f);
                 normalData[i] = (half4)c;
+            }
+
+            albedoData = new NativeArray<float4>(albedo.Length, Allocator.Persistent);
+            for (int i = 0; i < albedo.Length; i++)
+            {
+                Color32 b = albedo[i];
+                float4 c = new float4(b.r / 255f, b.g / 255f, b.b / 255f, b.a / 255f);
+                albedoData[i] = c;
             }
 
             giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, TextureFormat.RGBAHalf, -1, true);
@@ -123,6 +139,8 @@ namespace SDFGenerator
             bvhTree.Dispose();
             depthData.Dispose();
             normalData.Dispose();
+            albedoData.Dispose();
+            metallicData.Dispose();
 
             Destroy(giTexture);
         }

@@ -11,6 +11,9 @@ using System;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using static SDFGenerator.Montcalo;
+using static SDFGenerator.RandomFunc;
+using static Unity.Mathematics.math;
 
 namespace SDFGenerator
 {
@@ -26,16 +29,23 @@ namespace SDFGenerator
         [ReadOnly]
         public NativeArray<float> DepthMap;
         [ReadOnly]
-        public NativeArray<half4> NormalMap;
+        public NativeArray<float4> AlbedoMap;
+        [ReadOnly]
+        public NativeArray<float4> NormalMap;
+        [ReadOnly]
+        public NativeArray<float4> MetallicMap;
         [WriteOnly]
         public NativeArray<half4> GIMap;
         public float4x4 ViewProjectionMatrixInv;
         public int2 GBufferDimension;
         public int2 Dimension;
         public float3 EyePos;
+        public int FrameIDMod8;
         public void Execute(int startIndex, int count)
         {
             int endIdx = startIndex + count;
+            uint2 Random = Rand3DPCG16(int3(startIndex % Dimension.x, startIndex / Dimension.x, FrameIDMod8)).xy;
+
             for (int idx = startIndex; idx < endIdx; idx++)
             {
                 var uv = ToUV(idx);
@@ -45,7 +55,11 @@ namespace SDFGenerator
                     var normal = tex2d(NormalMap, uv, GBufferDimension);
                     var worldPos = DepthToWorldPos(uv, depth);
                     var rayDir = math.normalize(worldPos - EyePos);
-                    
+
+                    var hash = Hammersley16((uint)startIndex, (uint)count, Random);
+                    var H = ImportanceSampleGGX(hash, 0);
+                    float pdf = H.w;
+                    var nextRay = TangentToWorld(H.xyz, normal);
                 }
             }
         }
@@ -57,14 +71,14 @@ namespace SDFGenerator
             return (D / D.w).xyz;
         }
 
-        float4 tex2d(NativeArray<half4> tex, float2 uv, int2 size)
+        float4 tex2d(NativeArray<float4> tex, float2 uv, int2 size)
         {
             var maxSize = size - 1;
             uv = math.frac(uv);
 
             var uv_img = uv * size;
-            var uv0 = math.clamp(math.floor(uv_img), int2.zero, maxSize);
-            var uv1 = math.clamp(uv0 + 1, int2.zero, maxSize);
+            var uv0 = math.clamp(math.floor(uv_img), Unity.Mathematics.int2.zero, maxSize);
+            var uv1 = math.clamp(uv0 + 1, Unity.Mathematics.int2.zero, maxSize);
 
 
             var cuv0 = math.lerp(tex[(int)(uv0.y * size.x + uv0.x)], tex[(int)(uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
@@ -79,8 +93,8 @@ namespace SDFGenerator
             uv = math.frac(uv);
 
             var uv_img = uv * size;
-            var uv0 = math.clamp(math.floor(uv_img), int2.zero, maxSize);
-            var uv1 = math.clamp(uv0 + 1, int2.zero, maxSize);
+            var uv0 = math.clamp(math.floor(uv_img), Unity.Mathematics.int2.zero, maxSize);
+            var uv1 = math.clamp(uv0 + 1, Unity.Mathematics.int2.zero, maxSize);
 
 
             var cuv0 = math.lerp(tex[(int)(uv0.y * size.x + uv0.x)], tex[(int)(uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);

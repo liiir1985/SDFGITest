@@ -1840,6 +1840,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c13503f71fd1ccc48b562aa1b036da72, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  albedoTexture: {fileID: 2800000, guid: 48bc971fd1e6d514b8f03d6795d75dbc, type: 3}
+  metallicTexture: {fileID: 2800000, guid: 9a108ea94a3ad1a4bbbae40a59e21581, type: 3}
   depthTexture: {fileID: 2800000, guid: 22412820ba4e32f478e2a79f06f32361, type: 3}
   normalTexture: {fileID: 2800000, guid: 7244a08bd3924654c8905872095e3380, type: 3}
 --- !u!4 &1368092428
