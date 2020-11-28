@@ -60,7 +60,7 @@ namespace SDFGenerator
                     var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
                     var H = ImportanceSampleGGX(hash, 1f - normal.w);
                     float pdf = H.w;
-                    var N = WorldToTangent(H.xyz, normalize(normal.xyz));//??? Dunno why worldToTangent yields the right result
+                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
                     RayMarch(worldPos, reflect(rayDir, N.xyz));
                 }
             }

@@ -85,7 +85,7 @@ namespace SDFGenerator
 			float3 UpVector = abs(TangentZ.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
 			float3 TangentX = normalize(cross(UpVector, TangentZ));
 			float3 TangentY = cross(TangentZ, TangentX);
-			return float3x3(TangentX, TangentY, TangentZ);
+			return transpose(float3x3(TangentX, TangentY, TangentZ));//Unity math library takes vector as column rather than row
 		}
 
 		public static float3 TangentToWorld(float3 Vec, float3 TangentZ)
