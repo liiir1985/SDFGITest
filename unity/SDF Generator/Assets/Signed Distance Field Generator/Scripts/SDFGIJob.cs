@@ -35,7 +35,6 @@ namespace SDFGenerator
         public NativeArray<float4> NormalMap;
         [ReadOnly]
         public NativeArray<float4> MetallicMap;
-        [WriteOnly]
         public NativeArray<half4> GIMap;
         public float4x4 ViewProjectionMatrixInv;
         public int2 GBufferDimension;
@@ -46,28 +45,38 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.25f;
+        const int SPP = 64;
         public void Execute(int startIndex, int count)
         {
             int endIdx = startIndex + count;
+            int FrameIDMod8 = 0;
             for (int idx = startIndex; idx < endIdx; idx++)
             {
-                int3 randomSeed = int3(idx % Dimension.x, idx / Dimension.x, FrameIDMod8);
-                int randomIndex = 0;
-                uint2 Random = Rand3DPCG16(randomSeed).xy;
-                var uv = ToUV(idx);
-                var depth = tex2d(DepthMap, uv, GBufferDimension);
-                if (depth > float.Epsilon)
+                float4 color = default;
+                for (int i = 0; i < SPP; i++)
                 {
-                    var normal = tex2d(NormalMap, uv, GBufferDimension);
-                    var worldPos = DepthToWorldPos(uv, depth);
-                    var rayDir = normalize(worldPos - EyePos);
+                    int3 randomSeed = int3(idx % Dimension.x, idx / Dimension.x, FrameIDMod8++);
+                    int randomIndex = 0;
+                    uint2 Random = Rand3DPCG16(randomSeed).xy;
+                    var uv = ToUV(idx);
+                    var depth = tex2d(DepthMap, uv, GBufferDimension);
+                    if (depth > float.Epsilon)
+                    {
+                        var normal = tex2d(NormalMap, uv, GBufferDimension);
+                        var worldPos = DepthToWorldPos(uv, depth);
+                        var rayDir = normalize(worldPos - EyePos);
 
-                    var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
-                    var H = ImportanceSampleGGX(hash, 1f - normal.w);
-                    float pdf = H.w; 
-                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
-                    GIMap[idx] = (half4)float4(RayMarch(worldPos, reflect(rayDir, N.xyz), idx, GIMap.Length, randomSeed, ref randomIndex), 1f);
+                        var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
+                        var H = ImportanceSampleGGX(hash, 1f - normal.w);
+                        float pdf = H.w;
+                        var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+                        var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
+                        color += saturate(float4(RayMarch(worldPos, reflect(rayDir, N.xyz), idx, GIMap.Length, randomSeed, ref randomIndex), 1f));
+                        
+                    }
                 }
+
+                GIMap[idx] = (half4)(color / SPP);
             }
         }
 
@@ -124,7 +133,7 @@ namespace SDFGenerator
             {
                 var normal = mul(float4(voxel.NormalSDF.xyz, 1), hitVolume.WorldToLocal).xyz;
                 randomIdx++;
-                randomSeed.z = randomIdx;
+                randomSeed.z += randomIdx;
                 uint2 Random = Rand3DPCG16(randomSeed).xy;
                 var hash = Hammersley16((uint)(index), (uint)numSamples, Random);
 

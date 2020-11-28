@@ -5,4 +5,7 @@ Temp/
 *.csproj
 *.sln
 obj/
+Logs/
 unity/SDF Generator/Packages/packages-lock.json
+unity/SDF Generator/Assets/GITexture.exr
+unity/SDF Generator/Assets/GITexture.exr.meta

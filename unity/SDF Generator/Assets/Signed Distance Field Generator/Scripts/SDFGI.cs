@@ -151,7 +151,12 @@ namespace SDFGenerator
             handle.Complete();
             giTexture.Apply();
 
-            AssetDatabase.CreateAsset(giTexture, "Assets/GITexture.asset");
+            byte[] buffer = giTexture.EncodeToEXR();
+            using(System.IO.FileStream fs = new System.IO.FileStream("Assets/GITexture.exr", System.IO.FileMode.Create))
+            {
+                fs.Write(buffer, 0, buffer.Length);
+            }
+            AssetDatabase.Refresh();
         }
 
         private void OnDestroy()
@@ -163,8 +168,6 @@ namespace SDFGenerator
             normalData.Dispose();
             albedoData.Dispose();
             metallicData.Dispose();
-
-            Destroy(giTexture);
         }
 #if UNITY_EDITOR
         public int GizmoDepth { get; set; }
