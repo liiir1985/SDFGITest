@@ -34,7 +34,7 @@ namespace SDFGenerator
 			bits = ((bits & 0x33333333u) << 2) | ((bits & 0xCCCCCCCCu) >> 2);
 			bits = ((bits & 0x0F0F0F0Fu) << 4) | ((bits & 0xF0F0F0F0u) >> 4);
 			bits = ((bits & 0x00FF00FFu) << 8) | ((bits & 0xFF00FF00u) >> 8);
-			return ToFloat(bits) * 2.3283064365386963e-10f;
+			return (float)(bits) * 2.3283064365386963e-10f;
 		}
 
 		static float RadicalInverseSpecialized(uint _base, uint a)
@@ -57,12 +57,6 @@ namespace SDFGenerator
 		{
 			return (float)reversebits(a) / (float)0xffffffffu;
 		}
-		static unsafe float ToFloat(uint val)
-        {
-			float result;
-			*(uint*)(&result) = val;
-			return result;
-        }
 		public static float2 Hammersley(uint Index, uint NumSamples)
 		{
 			return float2((float)Index / (float)NumSamples, RadicalInverse_VdC(Index));
@@ -70,8 +64,8 @@ namespace SDFGenerator
 
 		public static float2 Hammersley(uint Index, uint NumSamples, uint2 Random)
 		{
-			float E1 = frac((float)Index / NumSamples + ToFloat(Random.x & 0xffff) / (1 << 16));
-			float E2 = ToFloat(ReverseBits32(Index) ^ Random.y) * 2.3283064365386963e-10f;
+			float E1 = frac((float)Index / NumSamples + (float)(Random.x & 0xffff) / (1 << 16));
+			float E2 = (float)(ReverseBits32(Index) ^ Random.y) * 2.3283064365386963e-10f;
 			return float2(E1, E2);
 		}
 
@@ -82,8 +76,8 @@ namespace SDFGenerator
 
 		public static float2 Hammersley16(uint Index, uint NumSamples, uint2 Random)
 		{
-			float E1 = frac((float)Index / NumSamples + ToFloat(Random.x) * (1.0f / 65536.0f));
-			float E2 = ToFloat((ReverseBits32(Index) >> 16) ^ Random.y) * (1.0f / 65536.0f);
+			float E1 = frac((float)Index / NumSamples + (float)(Random.x) * (1.0f / 65536.0f));
+			float E2 = (float)((ReverseBits32(Index) >> 16) ^ Random.y) * (1.0f / 65536.0f);
 			return float2(E1, E2);
 		}
 		public static float3x3 GetTangentBasis(float3 TangentZ)

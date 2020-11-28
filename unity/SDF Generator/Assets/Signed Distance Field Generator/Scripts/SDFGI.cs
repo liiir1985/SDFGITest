@@ -53,7 +53,7 @@ namespace SDFGenerator
             for(int i = 0; i < normal.Length; i++)
             {
                 Color32 b = normal[i];
-                float4 c = new float4(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a - 127) / 127f);
+                float4 c = new float4(((int)b.r - 127) / 127f, ((int)b.g - 127) / 127f, ((int)b.b - 127) / 127f, ((int)b.a / 255f));
                 normalData[i] = (half4)c;
             }
 
@@ -63,6 +63,14 @@ namespace SDFGenerator
                 Color32 b = albedo[i];
                 float4 c = new float4(b.r / 255f, b.g / 255f, b.b / 255f, b.a / 255f);
                 albedoData[i] = c;
+            }
+
+            metallicData = new NativeArray<float4>(metallic.Length, Allocator.Persistent);
+            for (int i = 0; i < metallic.Length; i++)
+            {
+                Color32 b = metallic[i];
+                float4 c = new float4(b.r / 255f, b.g / 255f, b.b / 255f, b.a / 255f);
+                metallicData[i] = c;
             }
 
             giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, TextureFormat.RGBAHalf, -1, true);
@@ -111,6 +119,9 @@ namespace SDFGenerator
 
         public void DoGI()
         {
+            float3 a = new float3(0f, 0f, -1f);
+            float3 t = new float3(0.1f, -0.1f, 1);
+            var v = Montcalo.TangentToWorld(t, math.normalize(a));
             var camera = Camera.main;
             Matrix4x4 viewMat = camera.worldToCameraMatrix;
             Matrix4x4 projMat = GL.GetGPUProjectionMatrix(camera.projectionMatrix, false);
@@ -119,6 +130,8 @@ namespace SDFGenerator
             job.Voxels = voxels;
             job.VolumeInfos = volumeInfos;
             job.BVHTree = bvhTree;
+            job.AlbedoMap = albedoData;
+            job.MetallicMap = metallicData;
             job.DepthMap = depthData;
             job.NormalMap = normalData;
             job.GIMap = giTexture.GetPixelData<half4>(0);

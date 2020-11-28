@@ -13,6 +13,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using static SDFGenerator.Montcalo;
 using static SDFGenerator.RandomFunc;
+using static SDFGenerator.Common;
 using static Unity.Mathematics.math;
 
 namespace SDFGenerator
@@ -44,22 +45,48 @@ namespace SDFGenerator
         public void Execute(int startIndex, int count)
         {
             int endIdx = startIndex + count;
-            uint2 Random = Rand3DPCG16(int3(startIndex % Dimension.x, startIndex / Dimension.x, FrameIDMod8)).xy;
-
+            
             for (int idx = startIndex; idx < endIdx; idx++)
             {
+                uint2 Random = Rand3DPCG16(int3(idx % Dimension.x, idx / Dimension.x, FrameIDMod8)).xy;
                 var uv = ToUV(idx);
                 var depth = tex2d(DepthMap, uv, GBufferDimension);
                 if (depth > float.Epsilon)
                 {
                     var normal = tex2d(NormalMap, uv, GBufferDimension);
                     var worldPos = DepthToWorldPos(uv, depth);
-                    var rayDir = math.normalize(worldPos - EyePos);
+                    var rayDir = normalize(worldPos - EyePos);
 
-                    var hash = Hammersley16((uint)startIndex, (uint)count, Random);
-                    var H = ImportanceSampleGGX(hash, 0);
+                    var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
+                    var H = ImportanceSampleGGX(hash, 1f - normal.w);
                     float pdf = H.w;
-                    var nextRay = TangentToWorld(H.xyz, normal);
+                    var N = WorldToTangent(H.xyz, normalize(normal.xyz));//??? Dunno why worldToTangent yields the right result
+                    RayMarch(worldPos, reflect(rayDir, N.xyz));
+                }
+            }
+        }
+
+        void RayMarch(float3 pos, float3 dir)
+        {
+            for (int i = 0; i < BVHTree.Length; )
+            {
+                var node = BVHTree[i];
+                if (node.SDFVolume >= 0)
+                {
+                    if (IntersectAABBRay(node.Bounds, pos, dir))
+                    {
+                        var volume = VolumeInfos[node.SDFVolume];
+                        i++;
+                    }
+                    else
+                        i = node.FalseLink;
+                }
+                else
+                {
+                    if (IntersectAABBRay(node.Bounds, pos, dir))
+                        i++;
+                    else
+                        i = node.FalseLink;
                 }
             }
         }
