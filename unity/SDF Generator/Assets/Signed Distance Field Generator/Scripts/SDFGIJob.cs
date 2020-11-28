@@ -45,11 +45,12 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.25f;
-        const int SPP = 64;
+        const int SPP = 128;
         public void Execute(int startIndex, int count)
         {
             int endIdx = startIndex + count;
             int FrameIDMod8 = 0;
+            Unity.Mathematics.Random rand = new Unity.Mathematics.Random((uint)startIndex);
             for (int idx = startIndex; idx < endIdx; idx++)
             {
                 float4 color = default;
@@ -66,13 +67,15 @@ namespace SDFGenerator
                         var worldPos = DepthToWorldPos(uv, depth);
                         var rayDir = normalize(worldPos - EyePos);
 
-                        var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
+
+                        var hash = rand.NextFloat2();// Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
                         var H = ImportanceSampleGGX(hash, 1f - normal.w);
                         float pdf = H.w;
                         var N = TangentToWorld(H.xyz, normalize(normal.xyz));
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                        color += saturate(float4(RayMarch(worldPos, reflect(rayDir, N.xyz), idx, GIMap.Length, randomSeed, ref randomIndex), 1f));
-                        
+                        rayDir = reflect(rayDir, N.xyz);
+                        var L = RayMarch(worldPos, rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
+                        color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
                     }
                 }
 
@@ -80,14 +83,51 @@ namespace SDFGenerator
             }
         }
 
-        float3 RayMarch(float3 pos, float3 dir, int index, int numSamples,int3 randomSeed, ref int randomIdx)
+        float3 RayMarch(float3 pos, float3 dir, int index, int numSamples, int3 randomSeed, ref int randomIdx)
         {
-            SDFVoxel voxel = default;
-            SDFVolumeInfo hitVolume = default;
+            SDFVoxel voxel;
+            SDFVolumeInfo hitVolume;
+            float3 hitPos;
+            bool hit = RayCast(pos, dir, out voxel, out hitVolume, out hitPos);
+
+            if (hit)
+            {
+                var normal = mul(float4(voxel.NormalSDF.xyz, 1), hitVolume.WorldToLocal).xyz;
+                randomIdx++;
+                randomSeed.z += randomIdx;
+                uint2 Random = Rand3DPCG16(randomSeed).xy;
+                var hash = Hammersley16((uint)(index), (uint)numSamples, Random);
+
+                //Direct
+                float3 L_dir = default;
+                if (!RayCast(hitPos, -LightDir, out _, out _, out _))
+                {
+                    var LoN = dot(LightDir, normal); 
+                    L_dir = LightColor * ((float3)voxel.SurfaceAlbedoRough.xyz) * saturate(LoN);
+                }
+                if (hash.x < RussianRoulette)
+                {
+                    var worldPos = hitPos;
+                    var rayDir = -dir;
+                    var H = ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
+                    float pdf = H.w;
+                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+                }
+
+                return L_dir;
+            }
+            else
+                return default(float3);
+        }
+
+        bool RayCast(float3 pos, float3 dir, out SDFVoxel voxel, out SDFVolumeInfo hitVolume, out float3 hitPos)
+        {
+            voxel = default;
+            hitVolume = default;
+            hitPos = default;
             float minDistance = float.MaxValue;
-            float3 hitPos = default;
             bool hit = false;
-            for (int i = 0; i < BVHTree.Length; )
+            for (int i = 0; i < BVHTree.Length;)
             {
                 var node = BVHTree[i];
                 if (node.SDFVolume >= 0)
@@ -97,11 +137,11 @@ namespace SDFGenerator
                         var volume = VolumeInfos[node.SDFVolume];
                         var localPos = mul(volume.WorldToLocal, float4(pos, 1)).xyz;
                         var localDir = normalize(mul(volume.WorldToLocal, float4(dir, 1)).xyz);
-                        if(IntersectAABBRay(volume.SDFBounds, localPos, localDir, out float tmin, out float tmax))
+                        if (IntersectAABBRay(volume.SDFBounds, localPos, localDir, out float tmin, out float tmax))
                         {
                             localPos = localPos + localDir * (tmin + 0.01f);
                             SDFVoxel result = default;
-                            if(RayCastSDF(ref volume, localPos, localDir, ref result, out var sdfPos))
+                            if (RayCastSDF(ref volume, localPos, localDir, ref result, out var sdfPos))
                             {
                                 sdfPos = mul(float4(sdfPos, 1), volume.WorldToLocal).xyz;
                                 var dis = distancesq(sdfPos, pos);
@@ -129,34 +169,9 @@ namespace SDFGenerator
                 }
             }
 
-            if (hit)
-            {
-                var normal = mul(float4(voxel.NormalSDF.xyz, 1), hitVolume.WorldToLocal).xyz;
-                randomIdx++;
-                randomSeed.z += randomIdx;
-                uint2 Random = Rand3DPCG16(randomSeed).xy;
-                var hash = Hammersley16((uint)(index), (uint)numSamples, Random);
-
-                //Direct
-                var H = UniformSampleCone(hash, PI / 8);
-                var rayDir = TangentToWorld(H.xyz, LightDir);
-                float3 L_dir = LightColor * ((float3)voxel.SurfaceAlbedoRough.xyz / PI) * saturate(dot(rayDir, normal)) / (H.w + float.Epsilon);
-
-                if (hash.x < RussianRoulette)
-                {
-                    var worldPos = hitPos;
-                    rayDir = -dir;
-                    H = ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
-                    float pdf = H.w;
-                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
-                }
-
-                return L_dir;
-            }
-            else
-                return default(float3);
+            return hit;
         }
-
+    
         //float3 BRDF(SDFVoxel voxel, float3 normal, float3 wi)
         //{
 

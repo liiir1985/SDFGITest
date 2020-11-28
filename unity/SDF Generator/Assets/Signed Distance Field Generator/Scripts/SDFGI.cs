@@ -36,6 +36,8 @@ namespace SDFGenerator
         Texture2D normalTexture;
         [SerializeField]
         Light sun;
+        [SerializeField]
+        UnityEngine.UI.RawImage rawImg;
         Texture2D giTexture;
         private void Start()
         {  
@@ -144,8 +146,8 @@ namespace SDFGenerator
             job.ViewProjectionMatrixInv = viewProjMat.inverse;
             job.Dimension = new int2(giTexture.width, giTexture.height);
             job.EyePos = camera.transform.position;
-            job.LightDir = -sun.transform.forward;
-            job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b);
+            job.LightDir = sun.transform.forward;
+            job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity;
 
             var handle = job.ScheduleBatch(job.GIMap.Length, 256);
             handle.Complete();
@@ -157,6 +159,8 @@ namespace SDFGenerator
                 fs.Write(buffer, 0, buffer.Length);
             }
             AssetDatabase.Refresh();
+
+            rawImg.texture = giTexture;
         }
 
         private void OnDestroy()

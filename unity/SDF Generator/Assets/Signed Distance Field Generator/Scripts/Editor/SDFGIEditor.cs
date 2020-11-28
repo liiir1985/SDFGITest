@@ -15,7 +15,7 @@ namespace SDFGenerator
     public class SDFGIEditor : Editor
     {
         int curDepth;
-        SerializedProperty depthTexture, normalTexture, albedoTexture, metallicTexture, sun;
+        SerializedProperty depthTexture, normalTexture, albedoTexture, metallicTexture, sun, rawImg;
         private void OnEnable()
         {
             depthTexture = serializedObject.FindProperty("depthTexture");
@@ -23,6 +23,7 @@ namespace SDFGenerator
             albedoTexture = serializedObject.FindProperty("albedoTexture");
             metallicTexture = serializedObject.FindProperty("metallicTexture");
             sun = serializedObject.FindProperty("sun");
+            rawImg = serializedObject.FindProperty("rawImg");
         }
         public unsafe override void OnInspectorGUI()
         {
@@ -30,6 +31,7 @@ namespace SDFGenerator
             int maxDepth = sdfgi.MaxDepth;
 
             EditorGUILayout.PropertyField(sun);
+            EditorGUILayout.PropertyField(rawImg);
             EditorGUILayout.PropertyField(depthTexture);
             EditorGUILayout.PropertyField(normalTexture);
             EditorGUILayout.PropertyField(albedoTexture);
