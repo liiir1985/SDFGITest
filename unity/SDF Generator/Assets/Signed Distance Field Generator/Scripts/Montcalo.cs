@@ -103,6 +103,20 @@ namespace SDFGenerator
 			float3 T2W = TangentToWorld(Vec, TangentZ.xyz);
 			return float4(T2W, TangentZ.w);
 		}
+		public static float4 UniformSampleCone(float2 E, float CosThetaMax)
+		{
+			float Phi = 2 * PI * E.x;
+			float CosTheta = lerp(CosThetaMax, 1, E.y);
+			float SinTheta = sqrt(1 - CosTheta * CosTheta);
+
+			float3 L;
+			L.x = SinTheta * cos(Phi);
+			L.y = SinTheta * sin(Phi);
+			L.z = CosTheta;
+
+			float PDF = 1.0f / (2 * PI * (1 - CosThetaMax));
+			return float4(L, PDF);
+		}
 		public static float4 ImportanceSampleGGX(float2 E, float Roughness)
 		{
 			float m = Roughness * Roughness;

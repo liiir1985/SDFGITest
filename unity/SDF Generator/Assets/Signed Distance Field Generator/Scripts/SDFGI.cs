@@ -34,6 +34,8 @@ namespace SDFGenerator
         Texture2D depthTexture;
         [SerializeField]
         Texture2D normalTexture;
+        [SerializeField]
+        Light sun;
         Texture2D giTexture;
         private void Start()
         {  
@@ -74,6 +76,7 @@ namespace SDFGenerator
             }
 
             giTexture = new Texture2D(depthTexture.width / 2, depthTexture.height / 2, TextureFormat.RGBAHalf, -1, true);
+            giTexture.name = "GI Texture";
             var volumes = Object.FindObjectsOfType<SDFVolume>();
             bvh = new BVH(volumes);
             bvh.Build();
@@ -97,10 +100,12 @@ namespace SDFGenerator
                 info.AABB = volume.Bounds.ToAABB();
                 info.SDFBounds = volume.SDFBounds;
                 info.Dimension = volume.Dimension;
+                info.WorldToLocal = volume.WorldToLocal;
                 info.StartIndex = curIdx;
+                info.EndIndex = curIdx + info.Dimension.x * info.Dimension.y * info.Dimension.z; 
                 volumeInfos[i] = info;
                 volume.ReadData(voxels, curIdx);
-                curIdx += info.Dimension.x * info.Dimension.y * info.Dimension.z;
+                curIdx = info.EndIndex;
             }
 
             for (int i = 0; i < nodes.Count; i++)
@@ -139,10 +144,14 @@ namespace SDFGenerator
             job.ViewProjectionMatrixInv = viewProjMat.inverse;
             job.Dimension = new int2(giTexture.width, giTexture.height);
             job.EyePos = camera.transform.position;
+            job.LightDir = -sun.transform.forward;
+            job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b);
 
             var handle = job.ScheduleBatch(job.GIMap.Length, 256);
             handle.Complete();
             giTexture.Apply();
+
+            AssetDatabase.CreateAsset(giTexture, "Assets/GITexture.asset");
         }
 
         private void OnDestroy()

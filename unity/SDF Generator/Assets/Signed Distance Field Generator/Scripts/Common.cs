@@ -17,14 +17,19 @@ namespace SDFGenerator
 {
     public static class Common
 	{
-		public static bool IntersectAABBRay(AABB aabb, float3 origin, float3 dir)
+        public static bool IntersectAABBRay(AABB aabb, float3 origin, float3 dir)
+        {
+            return IntersectAABBRay(aabb, origin, dir, out _, out _);
+        }
+        
+        public static bool IntersectAABBRay(AABB aabb, float3 origin, float3 dir, out float tmin, out float tmax)
         {
             float3 dir_inv = 1.0f / dir;
             float t1 = (aabb.Min[0] - origin[0]) * dir_inv[0];
             float t2 = (aabb.Max[0] - origin[0]) * dir_inv[0];
 
-            float tmin = min(t1, t2);
-            float tmax = max(t1, t2);
+            tmin = min(t1, t2);
+            tmax = max(t1, t2);
 
             for (int i = 1; i < 3; ++i)
             {

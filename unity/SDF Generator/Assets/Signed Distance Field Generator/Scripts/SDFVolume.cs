@@ -18,7 +18,9 @@ namespace SDFGenerator
         public AABB AABB;
         public AABB SDFBounds;
         public int3 Dimension;
+        public float4x4 WorldToLocal;
         public int StartIndex;
+        public int EndIndex;
     }
     public class SDFVolume : MonoBehaviour
     {
@@ -43,6 +45,8 @@ namespace SDFGenerator
         public int3 Dimension => dimension;
 
         public int Resolusion => resolusion;
+
+        public float4x4 WorldToLocal => transform.worldToLocalMatrix;
 
         private void Awake()
         {
