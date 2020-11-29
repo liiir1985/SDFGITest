@@ -1332,7 +1332,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c156d2582ad3034198753042f7c0e3a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sdfAsset: {fileID: 4900000, guid: 80aa61286daecaa4a9de601b4088e07c, type: 3}
+  sdfAsset: {fileID: 4900000, guid: b2df8fcd10fdcdd4d88f1ea83a98fa86, type: 3}
   Cube: {fileID: 3774135580107200197, guid: 711c53ded0c35ad4a8e90359f4e11b02, type: 3}
   meshRenderer: {fileID: 0}
   resolution: 2

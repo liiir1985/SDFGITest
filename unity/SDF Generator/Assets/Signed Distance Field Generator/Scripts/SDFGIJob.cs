@@ -45,7 +45,7 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.25f;
-        const int SPP = 4;
+        const int SPP = 32;
 
         public float3 PathTrace(int index)
         {
@@ -72,8 +72,8 @@ namespace SDFGenerator
                     //rayDir = reflect(rayDir, N.xyz);
                     rayDir = reflect(rayDir, normalize(normal.xyz)); 
                     var L = RayMarch(worldPos, rayDir, index, GIMap.Length, randomSeed, ref randomIndex);
-                    color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
-                    //color += saturate(float4(L, 1f));
+                    //color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                    color += saturate(float4(L, 1f));
                 }
             }
             return (color.xyz / SPP); 
@@ -97,7 +97,7 @@ namespace SDFGenerator
                     {
                         var normal = tex2d(NormalMap, uv, GBufferDimension);
                         var worldPos = DepthToWorldPos(uv, depth);
-                        var rayDir = normalize(EyePos - worldPos);
+                        var rayDir = normalize(worldPos - EyePos);
 
 
                         var hash = rand.NextFloat2();// Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
@@ -105,11 +105,11 @@ namespace SDFGenerator
                         float pdf = H.w;
                         var N = TangentToWorld(H.xyz, normalize(normal.xyz));
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                        //rayDir = reflect(rayDir, N.xyz);
-                        rayDir = reflect(rayDir, normalize(normal.xyz));
+                        rayDir = reflect(rayDir, N.xyz);
+                        //rayDir = reflect(rayDir, normalize(normal.xyz));
                         var L = RayMarch(worldPos, rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
-                        //color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
-                        color += saturate(float4(L, 1f));
+                        color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                        //color += saturate(float4(L, 1f));
                     }
                 }
 
@@ -139,7 +139,7 @@ namespace SDFGenerator
                     var LoN = dot(LightDir, normal); 
                     L_dir = LightColor * ((float3)voxel.SurfaceAlbedoRough.xyz) * saturate(LoN);
                 }
-                L_dir = voxel.SurfaceAlbedoRough.xyz;
+                //L_dir = voxel.SurfaceAlbedoRough.xyz;
                 if (hash.x < RussianRoulette)
                 {
                     var worldPos = hitPos;
@@ -171,14 +171,14 @@ namespace SDFGenerator
                     {
                         var volume = VolumeInfos[node.SDFVolume];
                         var localPos = mul(volume.WorldToLocal, float4(pos, 1)).xyz;
-                        var localDir = normalize(mul(volume.WorldToLocal, float4(dir, 1)).xyz);
+                        var localDir = normalize(mul(volume.WorldToLocal, float4(pos + dir, 1)).xyz - localPos);
                         if (IntersectAABBRay(volume.SDFBounds, localPos, localDir, out float tmin, out float tmax))
                         {
                             localPos = localPos + localDir * max((tmin + 0.01f), 0);
                             SDFVoxel result = default;
                             if (RayCastSDF(ref volume, localPos, localDir, ref result, out var sdfPos))
                             {
-                                sdfPos = mul(float4(sdfPos, 1), volume.WorldToLocal).xyz;
+                                sdfPos = mul(inverse(volume.WorldToLocal), float4(sdfPos, 1)).xyz;
                                 var dis = distancesq(sdfPos, pos);
                                 if (dis < minDistance)
                                 {
@@ -214,7 +214,7 @@ namespace SDFGenerator
 
         bool RayCastSDF(ref SDFVolumeInfo sdf, float3 pos, float3 dir, ref SDFVoxel voxel, out float3 hitPos)
         {
-            var sdfPos = pos - sdf.SDFBounds.Center; ;
+            var sdfPos = pos - sdf.SDFBounds.Center;
             var sizeBound = new AABB();
             sizeBound.Extents = sdf.SDFBounds.Extents;
             float curDis;
@@ -230,12 +230,13 @@ namespace SDFGenerator
                 sdfPos = sdfPos + dir * abs(curDis);
             }
             while (!hit && sizeBound.Contains(hitPos));
+            hitPos += sdf.SDFBounds.Center;
             return hit;
         }
 
         SDFVoxel SampleSDF(int startIdx,int endIdx, float3 uv, int3 dimension)
         {
-            var coord = uv * dimension;
+            var coord = round(uv * dimension);
             int index = (int)(coord.z * dimension.x * dimension.y + coord.y * dimension.x + coord.x);
             index = clamp(startIdx + index, startIdx, endIdx - 1);
             return Voxels[index];
