@@ -45,7 +45,7 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.25f;
-        const int SPP = 32;
+        const int SPP = 4;
 
         public float3 PathTrace(int index)
         {
@@ -69,7 +69,8 @@ namespace SDFGenerator
                     float pdf = H.w;
                     var N = TangentToWorld(H.xyz, normalize(normal.xyz));
                     var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                    rayDir = reflect(rayDir, N.xyz);
+                    //rayDir = reflect(rayDir, N.xyz);
+                    rayDir = reflect(rayDir, normalize(normal.xyz)); 
                     var L = RayMarch(worldPos, rayDir, index, GIMap.Length, randomSeed, ref randomIndex);
                     color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
                     //color += saturate(float4(L, 1f));
@@ -96,15 +97,16 @@ namespace SDFGenerator
                     {
                         var normal = tex2d(NormalMap, uv, GBufferDimension);
                         var worldPos = DepthToWorldPos(uv, depth);
-                        var rayDir = normalize(worldPos - EyePos);
+                        var rayDir = normalize(EyePos - worldPos);
 
 
                         var hash = rand.NextFloat2();// Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
-                        var H = ImportanceSampleGGX(hash, 1f - normal.w);
+                        var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1f - normal.w);
                         float pdf = H.w;
                         var N = TangentToWorld(H.xyz, normalize(normal.xyz));
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                        rayDir = reflect(rayDir, N.xyz);
+                        //rayDir = reflect(rayDir, N.xyz);
+                        rayDir = reflect(rayDir, normalize(normal.xyz));
                         var L = RayMarch(worldPos, rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
                         //color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
                         color += saturate(float4(L, 1f));
@@ -172,7 +174,7 @@ namespace SDFGenerator
                         var localDir = normalize(mul(volume.WorldToLocal, float4(dir, 1)).xyz);
                         if (IntersectAABBRay(volume.SDFBounds, localPos, localDir, out float tmin, out float tmax))
                         {
-                            localPos = localPos + localDir * (tmin + 0.01f);
+                            localPos = localPos + localDir * max((tmin + 0.01f), 0);
                             SDFVoxel result = default;
                             if (RayCastSDF(ref volume, localPos, localDir, ref result, out var sdfPos))
                             {
@@ -224,7 +226,7 @@ namespace SDFGenerator
                 voxel = SampleSDF(sdf.StartIndex, sdf.EndIndex, sdfuv, sdf.Dimension);
                 curDis = voxel.NormalSDF.w;
                 var NoL = dot(voxel.NormalSDF.xyz, dir);
-                hit = curDis < 0.125f && NoL < 0;
+                hit = curDis < 0.01f && NoL < 0;
                 sdfPos = sdfPos + dir * abs(curDis);
             }
             while (!hit && sizeBound.Contains(hitPos));
@@ -241,7 +243,7 @@ namespace SDFGenerator
 
         float3 DepthToWorldPos(float2 uv_depth, float depth)
         {
-            float4 H = new float4(uv_depth.x * 2.0f - 1.0f, (uv_depth.y) * 2.0f - 1.0f, depth, 1.0f);
+            float4 H = new float4(uv_depth.x * 2.0f - 1.0f, (1 - uv_depth.y) * 2.0f - 1.0f, depth, 1.0f);
             float4 D = math.mul(ViewProjectionMatrixInv, H);
             return (D / D.w).xyz;
         }
