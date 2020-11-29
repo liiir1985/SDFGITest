@@ -45,7 +45,7 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.5f;
-        const int SPP = 16;
+        const int SPP = 64;
 
         public float3 PathTrace(int index)
         {
@@ -309,11 +309,11 @@ namespace SDFGenerator
             var uv0 = math.clamp(math.floor(uv_img), Unity.Mathematics.int3.zero, maxSize);
             var uv1 = math.clamp(uv0 + 1, Unity.Mathematics.int3.zero, maxSize);
             
-            var cuv0 = lerp(&tex[(int)(uv0.z * uv0.y * size.x + uv0.y * size.x + uv0.x)], &tex[(int)(uv0.z * uv0.y * size.x + uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
-            var cuv1 = lerp(&tex[(int)(uv0.z * uv1.y * size.x + uv1.y * size.x + uv0.x)], &tex[(int)(uv0.z * uv1.y * size.x + uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            var cuv0 = lerp(&tex[(int)(uv0.z * size.y * size.x + uv0.y * size.x + uv0.x)], &tex[(int)(uv0.z * size.y * size.x + uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            var cuv1 = lerp(&tex[(int)(uv0.z * size.y * size.x + uv1.y * size.x + uv0.x)], &tex[(int)(uv0.z * size.y * size.x + uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
             var cFinal = lerp(&cuv0, &cuv1, uv_img.y - uv0.y);
-            cuv0 = lerp(&tex[(int)(uv1.z * uv0.y * size.x + uv0.y * size.x + uv0.x)], &tex[(int)(uv1.z * uv0.y * size.x + uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
-            cuv1 = lerp(&tex[(int)(uv1.z * uv1.y * size.x + uv1.y * size.x + uv0.x)], &tex[(int)(uv1.z * uv1.y * size.x + uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            cuv0 = lerp(&tex[(int)(uv1.z * size.y * size.x + uv0.y * size.x + uv0.x)], &tex[(int)(uv1.z * size.y * size.x + uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            cuv1 = lerp(&tex[(int)(uv1.z * size.y * size.x + uv1.y * size.x + uv0.x)], &tex[(int)(uv1.z * size.y * size.x + uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
             var cFinal2 = lerp(&cuv0, &cuv1, uv_img.y - uv0.y);
             var cFinal3 = lerp(&cFinal, &cFinal2, uv_img.z - uv0.z);
             return cFinal3;
