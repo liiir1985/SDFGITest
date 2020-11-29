@@ -45,12 +45,43 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.25f;
-        const int SPP = 128;
+        const int SPP = 32;
+
+        public float3 PathTrace(int index)
+        {
+            float4 color = default;
+            for (int i = 0; i < SPP; i++)
+            {
+                int3 randomSeed = int3(index % Dimension.x, index / Dimension.x, FrameIDMod8++);
+                int randomIndex = 0;
+                uint2 Random = Rand3DPCG16(randomSeed).xy;
+                var uv = ToUV(index);
+                var depth = tex2d(DepthMap, uv, GBufferDimension);
+                if (depth > float.Epsilon)
+                {
+                    var normal = tex2d(NormalMap, uv, GBufferDimension);
+                    var worldPos = DepthToWorldPos(uv, depth);
+                    var rayDir = normalize(worldPos - EyePos);
+
+
+                    var hash = Hammersley16((uint)(index), (uint)GIMap.Length, Random);
+                    var H = ImportanceSampleGGX(hash, 1f - normal.w);
+                    float pdf = H.w;
+                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+                    var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
+                    rayDir = reflect(rayDir, N.xyz);
+                    var L = RayMarch(worldPos, rayDir, index, GIMap.Length, randomSeed, ref randomIndex);
+                    color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                    //color += saturate(float4(L, 1f));
+                }
+            }
+            return (color.xyz / SPP); 
+        }
         public void Execute(int startIndex, int count)
         {
             int endIdx = startIndex + count;
             int FrameIDMod8 = 0;
-            Unity.Mathematics.Random rand = new Unity.Mathematics.Random((uint)startIndex);
+            Unity.Mathematics.Random rand = new Unity.Mathematics.Random((uint)startIndex + 1);
             for (int idx = startIndex; idx < endIdx; idx++)
             {
                 float4 color = default;
@@ -75,7 +106,8 @@ namespace SDFGenerator
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
                         rayDir = reflect(rayDir, N.xyz);
                         var L = RayMarch(worldPos, rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
-                        color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                        //color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                        color += saturate(float4(L, 1f));
                     }
                 }
 
@@ -100,11 +132,12 @@ namespace SDFGenerator
 
                 //Direct
                 float3 L_dir = default;
-                if (!RayCast(hitPos, -LightDir, out _, out _, out _))
+                if (!RayCast(hitPos, LightDir, out _, out _, out _))
                 {
                     var LoN = dot(LightDir, normal); 
                     L_dir = LightColor * ((float3)voxel.SurfaceAlbedoRough.xyz) * saturate(LoN);
                 }
+                L_dir = voxel.SurfaceAlbedoRough.xyz;
                 if (hash.x < RussianRoulette)
                 {
                     var worldPos = hitPos;
@@ -190,8 +223,9 @@ namespace SDFGenerator
                 var sdfuv = sdfPos / sdf.SDFBounds.Size + 0.5f;
                 voxel = SampleSDF(sdf.StartIndex, sdf.EndIndex, sdfuv, sdf.Dimension);
                 curDis = voxel.NormalSDF.w;
-                hit = curDis < 0.125f;
-                sdfPos = sdfPos + dir * curDis;
+                var NoL = dot(voxel.NormalSDF.xyz, dir);
+                hit = curDis < 0.125f && NoL < 0;
+                sdfPos = sdfPos + dir * abs(curDis);
             }
             while (!hit && sizeBound.Contains(hitPos));
             return hit;
@@ -200,8 +234,8 @@ namespace SDFGenerator
         SDFVoxel SampleSDF(int startIdx,int endIdx, float3 uv, int3 dimension)
         {
             var coord = uv * dimension;
-            int index = (int)(uv.z * dimension.x * dimension.y + uv.y * dimension.x + uv.x);
-            index = clamp(startIdx + index, startIdx, endIdx);
+            int index = (int)(coord.z * dimension.x * dimension.y + coord.y * dimension.x + coord.x);
+            index = clamp(startIdx + index, startIdx, endIdx - 1);
             return Voxels[index];
         }
 

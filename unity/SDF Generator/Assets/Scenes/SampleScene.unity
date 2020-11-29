@@ -1720,6 +1720,7 @@ GameObject:
   - component: {fileID: 1165209720}
   - component: {fileID: 1165209722}
   - component: {fileID: 1165209721}
+  - component: {fileID: 1165209723}
   m_Layer: 5
   m_Name: RawImage
   m_TagString: Untagged
@@ -1766,7 +1767,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Texture: {fileID: 2800000, guid: a4a745bd279cd6445800e71ec2939c62, type: 3}
+  m_Texture: {fileID: 2800000, guid: a5a96ad21ea3b4649ac79da29d37cab2, type: 3}
   m_UVRect:
     serializedVersion: 2
     x: 0
@@ -1781,6 +1782,19 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1165209719}
   m_CullTransparentMesh: 1
+--- !u!114 &1165209723
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1165209719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c1dcc1bcd17eaaa4c82e94d267e746d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  gi: {fileID: 1368092427}
 --- !u!4 &1278355951 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4354465822509128, guid: 85dfab9623c67784fa7894de63cd1604,

@@ -123,12 +123,37 @@ namespace SDFGenerator
                 bvhTree[i] = info;
             }
         }
-
-        public void DoGI()
+        Matrix4x4 CalcInvVP(int RenderWidth, int RenderHeight, bool isOpenGL)
         {
-            float3 a = new float3(0f, 0f, -1f);
-            float3 t = new float3(0.1f, -0.1f, 1);
-            var v = Montcalo.TangentToWorld(t, math.normalize(a));
+            var camera = Camera.main;
+            Matrix4x4 proj = camera.projectionMatrix;
+            Matrix4x4 view = camera.worldToCameraMatrix;
+            Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(proj, false);
+
+            // xy coordinates in range [-1; 1] go to pixel coordinates.
+            Matrix4x4 toScreen = new Matrix4x4(
+                new Vector4(0.5f * RenderWidth, 0.0f, 0.0f, 0.0f),
+                new Vector4(0.0f, 0.5f * RenderHeight, 0.0f, 0.0f),
+                new Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+                new Vector4(0.5f * RenderWidth, 0.5f * RenderHeight, 0.0f, 1.0f)
+            );
+
+            Matrix4x4 zScaleBias = Matrix4x4.identity;
+            if (isOpenGL)
+            {
+                // We need to manunally adjust z in NDC space from [-1; 1] to [0; 1] (storage in depth texture).
+                zScaleBias = new Matrix4x4(
+                    new Vector4(1.0f, 0.0f, 0.0f, 0.0f),
+                    new Vector4(0.0f, 1.0f, 0.0f, 0.0f),
+                    new Vector4(0.0f, 0.0f, 0.5f, 0.0f),
+                    new Vector4(0.0f, 0.0f, 0.5f, 1.0f)
+                );
+            }
+
+            return Matrix4x4.Inverse(toScreen * zScaleBias * gpuProj * view);
+        }
+        public void PathTrace(int index)
+        {
             var camera = Camera.main;
             Matrix4x4 viewMat = camera.worldToCameraMatrix;
             Matrix4x4 projMat = GL.GetGPUProjectionMatrix(camera.projectionMatrix, false);
@@ -146,12 +171,37 @@ namespace SDFGenerator
             job.ViewProjectionMatrixInv = viewProjMat.inverse;
             job.Dimension = new int2(giTexture.width, giTexture.height);
             job.EyePos = camera.transform.position;
-            job.LightDir = sun.transform.forward;
+            job.LightDir = -sun.transform.forward;
+            job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity;
+
+            job.PathTrace(index);
+        }
+
+        public void DoGI()
+        {
+            var camera = Camera.main;
+            Matrix4x4 viewMat = camera.worldToCameraMatrix;
+            Matrix4x4 projMat = GL.GetGPUProjectionMatrix(camera.projectionMatrix, false);
+            Matrix4x4 viewProjMat = (projMat * viewMat);
+            SDFGIJob job = new SDFGIJob();
+            job.Voxels = voxels;
+            job.VolumeInfos = volumeInfos;
+            job.BVHTree = bvhTree;
+            job.AlbedoMap = albedoData;
+            job.MetallicMap = metallicData;
+            job.DepthMap = depthData;
+            job.NormalMap = normalData;
+            job.GIMap = giTexture.GetPixelData<half4>(0);
+            job.GBufferDimension = new int2(normalTexture.width, normalTexture.height);
+            job.ViewProjectionMatrixInv = viewProjMat.inverse;
+            job.Dimension = new int2(giTexture.width, giTexture.height);
+            job.EyePos = camera.transform.position;
+            job.LightDir = -sun.transform.forward;
             job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity;
 
             var handle = job.ScheduleBatch(job.GIMap.Length, 256);
             handle.Complete();
-            giTexture.Apply();
+            giTexture.Apply(false, false);
 
             byte[] buffer = giTexture.EncodeToEXR();
             using(System.IO.FileStream fs = new System.IO.FileStream("Assets/GITexture.exr", System.IO.FileMode.Create))
