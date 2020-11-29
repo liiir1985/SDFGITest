@@ -44,8 +44,8 @@ namespace SDFGenerator
         public float3 LightColor;
         public int FrameIDMod8;
 
-        const float RussianRoulette = 0.25f;
-        const int SPP = 32;
+        const float RussianRoulette = 0.5f;
+        const int SPP = 16;
 
         public float3 PathTrace(int index)
         {
@@ -100,7 +100,7 @@ namespace SDFGenerator
                         var rayDir = normalize(worldPos - EyePos);
 
 
-                        var hash = rand.NextFloat2();// Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
+                        var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
                         var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1f - normal.w);
                         float pdf = H.w;
                         var N = TangentToWorld(H.xyz, normalize(normal.xyz));
@@ -126,7 +126,7 @@ namespace SDFGenerator
 
             if (hit)
             {
-                var normal = mul(float4(voxel.NormalSDF.xyz, 1), hitVolume.WorldToLocal).xyz;
+                var normal = mul(inverse(hitVolume.WorldToLocal), float4(voxel.NormalSDF.xyz, 1)).xyz;
                 randomIdx++;
                 randomSeed.z += randomIdx;
                 uint2 Random = Rand3DPCG16(randomSeed).xy;
@@ -139,17 +139,23 @@ namespace SDFGenerator
                     var LoN = dot(LightDir, normal); 
                     L_dir = LightColor * ((float3)voxel.SurfaceAlbedoRough.xyz) * saturate(LoN);
                 }
-                //L_dir = voxel.SurfaceAlbedoRough.xyz;
+                L_dir += voxel.EmissionMetallic.xyz;
+                float4 L_Indir = default;
                 if (hash.x < RussianRoulette)
                 {
                     var worldPos = hitPos;
                     var rayDir = -dir;
-                    var H = ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
+                    var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
                     float pdf = H.w;
                     var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+                    var albedo = (float3)voxel.SurfaceAlbedoRough.xyz;
+                    rayDir = reflect(rayDir, N.xyz);
+                    //rayDir = reflect(rayDir, normalize(normal.xyz));
+                    var L = RayMarch(worldPos, rayDir, index, numSamples, randomSeed, ref randomIdx);
+                    L_Indir += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w * RussianRoulette + float.Epsilon), 1f));
                 }
 
-                return L_dir;
+                return L_dir + L_Indir.xyz;
             }
             else
                 return default(float3);
@@ -219,6 +225,7 @@ namespace SDFGenerator
             sizeBound.Extents = sdf.SDFBounds.Extents;
             float curDis;
             bool hit = false;
+            int cnt = 0;
             do
             {
                 hitPos = sdfPos;
@@ -227,19 +234,22 @@ namespace SDFGenerator
                 curDis = voxel.NormalSDF.w;
                 var NoL = dot(voxel.NormalSDF.xyz, dir);
                 hit = curDis < 0.01f && NoL < 0;
-                sdfPos = sdfPos + dir * abs(curDis);
+                sdfPos = sdfPos + dir * max(abs(curDis), 0.01f);
+                cnt++;
             }
             while (!hit && sizeBound.Contains(hitPos));
             hitPos += sdf.SDFBounds.Center;
             return hit;
         }
 
-        SDFVoxel SampleSDF(int startIdx,int endIdx, float3 uv, int3 dimension)
+        unsafe SDFVoxel SampleSDF(int startIdx,int endIdx, float3 uv, int3 dimension)
         {
-            var coord = round(uv * dimension);
+            SDFVoxel* ptr = (SDFVoxel*)Voxels.GetUnsafeReadOnlyPtr();
+            return tex3d(ptr + startIdx, uv, dimension);
+            /*var coord = round(uv * dimension);
             int index = (int)(coord.z * dimension.x * dimension.y + coord.y * dimension.x + coord.x);
             index = clamp(startIdx + index, startIdx, endIdx - 1);
-            return Voxels[index];
+            return Voxels[index];*/
         }
 
         float3 DepthToWorldPos(float2 uv_depth, float depth)
@@ -281,6 +291,33 @@ namespace SDFGenerator
             return cFinal;
         }
 
+        unsafe SDFVoxel lerp(SDFVoxel* a, SDFVoxel* b, float t)
+        {
+            SDFVoxel res = default;
+            res.NormalSDF = (half4)math.lerp(a->NormalSDF, b->NormalSDF, t);
+            res.SurfaceAlbedoRough = (half4)math.lerp(a->SurfaceAlbedoRough, b->SurfaceAlbedoRough, t);
+            res.EmissionMetallic = (half4)math.lerp(a->EmissionMetallic, b->EmissionMetallic, t);
+            return res;
+        }
+
+        unsafe SDFVoxel tex3d(SDFVoxel* tex, float3 uv, int3 size)
+        {
+            var maxSize = size - 1;
+            uv = math.frac(uv);
+
+            var uv_img = uv * size;
+            var uv0 = math.clamp(math.floor(uv_img), Unity.Mathematics.int3.zero, maxSize);
+            var uv1 = math.clamp(uv0 + 1, Unity.Mathematics.int3.zero, maxSize);
+            
+            var cuv0 = lerp(&tex[(int)(uv0.z * uv0.y * size.x + uv0.y * size.x + uv0.x)], &tex[(int)(uv0.z * uv0.y * size.x + uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            var cuv1 = lerp(&tex[(int)(uv0.z * uv1.y * size.x + uv1.y * size.x + uv0.x)], &tex[(int)(uv0.z * uv1.y * size.x + uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            var cFinal = lerp(&cuv0, &cuv1, uv_img.y - uv0.y);
+            cuv0 = lerp(&tex[(int)(uv1.z * uv0.y * size.x + uv0.y * size.x + uv0.x)], &tex[(int)(uv1.z * uv0.y * size.x + uv0.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            cuv1 = lerp(&tex[(int)(uv1.z * uv1.y * size.x + uv1.y * size.x + uv0.x)], &tex[(int)(uv1.z * uv1.y * size.x + uv1.y * size.x + uv1.x)], uv_img.x - uv0.x);
+            var cFinal2 = lerp(&cuv0, &cuv1, uv_img.y - uv0.y);
+            var cFinal3 = lerp(&cFinal, &cFinal2, uv_img.z - uv0.z);
+            return cFinal3;
+        }
         float dot2(float3 v)
         {
             return math.dot(v, v);

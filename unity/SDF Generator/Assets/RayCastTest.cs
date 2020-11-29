@@ -7,7 +7,7 @@ public class RayCastTest : MonoBehaviour,IPointerClickHandler
     public SDFGenerator.SDFGI gi;
     public void OnPointerClick(PointerEventData eventData)
     {
-        var ep = new Vector2(585.1f, 192.6f);
+        var ep = new Vector2(574.4f, 112.5f);
         var pos = ep / 2f;// eventData.position / 2;
         pos.y = 309 - pos.y;
         int index = (int)pos.y * 604 + (int)pos.x;
