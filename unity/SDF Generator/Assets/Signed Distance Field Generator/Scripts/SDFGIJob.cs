@@ -1,4 +1,6 @@
-﻿//
+﻿//#define NO_BILINEAR
+
+//
 // Copyright © Daniel Shervheim, 2019
 // www.danielshervheim.com
 //
@@ -244,9 +246,13 @@ namespace SDFGenerator
             hitPos += sdf.SDFBounds.Center;
             return hit;
         }
-
         float4 SampleSDFValue(NativeSlice<SDFVoxel> tex, in float3 uv, in int3 size)
         {
+#if NO_BILINEAR
+            var maxSize = size - 1;
+            var uv_img = min(round(uv * size), maxSize);
+            return tex[(int)(uv_img.z * size.y * size.x + uv_img.y * size.x + uv_img.x)].NormalSDF;
+#else
             var maxSize = size - 1;
             //uv = math.frac(uv);
 
@@ -254,19 +260,22 @@ namespace SDFGenerator
             var uv0 = math.clamp(math.floor(uv_img), Unity.Mathematics.int3.zero, maxSize);
             var uv1 = math.clamp(uv0 + 1, Unity.Mathematics.int3.zero, maxSize);
 
-            var cuv0 = lerpSDF(ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv0.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv0.y * size.x + uv1.x)), uv_img.x - uv0.x);
-            var cuv1 = lerpSDF(ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv1.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv1.y * size.x + uv1.x)), uv_img.x - uv0.x);
+            float4 cuv0;
+            float4 cuv1;
+            lerpSDF(ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv0.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv0.y * size.x + uv1.x)), uv_img.x - uv0.x, out cuv0);
+            lerpSDF(ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv1.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv1.y * size.x + uv1.x)), uv_img.x - uv0.x, out cuv1);
             var cFinal = math.lerp(cuv0, cuv1, uv_img.y - uv0.y);
-            cuv0 = lerpSDF(ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv0.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv0.y * size.x + uv1.x)), uv_img.x - uv0.x);
-            cuv1 = lerpSDF(ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv1.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv1.y * size.x + uv1.x)), uv_img.x - uv0.x);
+            lerpSDF(ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv0.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv0.y * size.x + uv1.x)), uv_img.x - uv0.x, out cuv0);
+            lerpSDF(ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv1.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv1.y * size.x + uv1.x)), uv_img.x - uv0.x, out cuv1);
             var cFinal2 = math.lerp(cuv0, cuv1, uv_img.y - uv0.y);
             var cFinal3 = math.lerp(cFinal, cFinal2, uv_img.z - uv0.z);
             return cFinal3;
+#endif
         }
 
-        float4 lerpSDF(ref SDFVoxel a, ref SDFVoxel b, float t)
+        void lerpSDF(ref SDFVoxel a, ref SDFVoxel b, float t, out float4 result)
         {
-            return math.lerp(a.NormalSDF, b.NormalSDF, t);
+            result = math.lerp(a.NormalSDF, b.NormalSDF, t);
         }
 
         unsafe SDFVoxel SampleSDF(int startIdx, int endIdx, in float3 uv, in int3 dimension)
