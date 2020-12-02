@@ -18,7 +18,7 @@ using static Unity.Mathematics.math;
 
 namespace SDFGenerator
 {
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast)]
     public struct SDFGIJob : IJobParallelForBatch
     {
         [ReadOnly]
@@ -107,7 +107,7 @@ namespace SDFGenerator
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
                         rayDir = reflect(rayDir, N.xyz);
                         //rayDir = reflect(rayDir, normalize(normal.xyz));
-                        var L = RayMarch(worldPos, rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
+                        var L = RayMarch(in worldPos, in rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
                         color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
                         //color += saturate(float4(L, 1f));
                     }
@@ -117,16 +117,16 @@ namespace SDFGenerator
             }
         }
 
-        float3 RayMarch(float3 pos, float3 dir, int index, int numSamples, int3 randomSeed, ref int randomIdx)
+        float3 RayMarch(in float3 pos, in float3 dir, int index, int numSamples, int3 randomSeed, ref int randomIdx)
         {
             SDFVoxel voxel;
             SDFVolumeInfo hitVolume;
             float3 hitPos;
-            bool hit = RayCast(pos, dir, out voxel, out hitVolume, out hitPos);
+            bool hit = RayCast(in pos, in dir, out voxel, out hitVolume, out hitPos);
 
             if (hit)
             {
-                var normal = mul(inverse(hitVolume.WorldToLocal), float4(voxel.NormalSDF.xyz, 1)).xyz;
+                var normal = mul(hitVolume.WorldToLocalInv, float4(voxel.NormalSDF.xyz, 1)).xyz;
                 randomIdx++;
                 randomSeed.z += randomIdx;
                 uint2 Random = Rand3DPCG16(randomSeed).xy;
@@ -134,9 +134,9 @@ namespace SDFGenerator
 
                 //Direct
                 float3 L_dir = default;
-                if (!RayCast(hitPos, LightDir, out _, out _, out _))
+                if (!RayCast(in hitPos, in LightDir, out _, out _, out _))
                 {
-                    var LoN = dot(LightDir, normal); 
+                    var LoN = dot(LightDir, normal);
                     L_dir = LightColor * ((float3)voxel.SurfaceAlbedoRough.xyz) * saturate(LoN);
                 }
                 L_dir += voxel.EmissionMetallic.xyz;
@@ -151,7 +151,7 @@ namespace SDFGenerator
                     var albedo = (float3)voxel.SurfaceAlbedoRough.xyz;
                     rayDir = reflect(rayDir, N.xyz);
                     //rayDir = reflect(rayDir, normalize(normal.xyz));
-                    var L = RayMarch(worldPos, rayDir, index, numSamples, randomSeed, ref randomIdx);
+                    var L = RayMarch(in worldPos, in rayDir, index, numSamples, randomSeed, ref randomIdx);
                     L_Indir += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w * RussianRoulette + float.Epsilon), 1f));
                 }
 
@@ -161,7 +161,7 @@ namespace SDFGenerator
                 return default(float3);
         }
 
-        bool RayCast(float3 pos, float3 dir, out SDFVoxel voxel, out SDFVolumeInfo hitVolume, out float3 hitPos)
+        bool RayCast(in float3 pos, in float3 dir, out SDFVoxel voxel, out SDFVolumeInfo hitVolume, out float3 hitPos)
         {
             voxel = default;
             hitVolume = default;
@@ -170,21 +170,21 @@ namespace SDFGenerator
             bool hit = false;
             for (int i = 0; i < BVHTree.Length;)
             {
-                var node = BVHTree[i];
+                ref var node = ref BVHTree.GetByRef(i);
                 if (node.SDFVolume >= 0)
                 {
-                    if (IntersectAABBRay(node.Bounds, pos, dir))
+                    if (IntersectAABBRay(in node.Bounds, in pos, in dir))
                     {
-                        var volume = VolumeInfos[node.SDFVolume];
+                        ref var volume = ref VolumeInfos.GetByRef(node.SDFVolume);
                         var localPos = mul(volume.WorldToLocal, float4(pos, 1)).xyz;
                         var localDir = normalize(mul(volume.WorldToLocal, float4(pos + dir, 1)).xyz - localPos);
-                        if (IntersectAABBRay(volume.SDFBounds, localPos, localDir, out float tmin, out float tmax))
+                        if (IntersectAABBRay(in volume.SDFBounds, in localPos, in localDir, out float tmin, out float tmax))
                         {
                             localPos = localPos + localDir * max((tmin + 0.01f), 0);
                             SDFVoxel result = default;
-                            if (RayCastSDF(ref volume, localPos, localDir, ref result, out var sdfPos))
+                            if (RayCastSDF(in volume, in localPos, in localDir, out result, out var sdfPos))
                             {
-                                sdfPos = mul(inverse(volume.WorldToLocal), float4(sdfPos, 1)).xyz;
+                                sdfPos = mul(volume.WorldToLocalInv, float4(sdfPos, 1)).xyz;
                                 var dis = distancesq(sdfPos, pos);
                                 if (dis < minDistance)
                                 {
@@ -218,7 +218,7 @@ namespace SDFGenerator
 
         //}
 
-        bool RayCastSDF(ref SDFVolumeInfo sdf, float3 pos, float3 dir, ref SDFVoxel voxel, out float3 hitPos)
+        bool RayCastSDF(in SDFVolumeInfo sdf, in float3 pos, in float3 dir, out SDFVoxel voxel, out float3 hitPos)
         {
             var sdfPos = pos - sdf.SDFBounds.Center;
             var sizeBound = new AABB();
@@ -226,23 +226,50 @@ namespace SDFGenerator
             float curDis;
             bool hit = false;
             int cnt = 0;
+            float3 sdfuv;
+            NativeSlice<SDFVoxel> slice = Voxels.Slice(sdf.StartIndex, sdf.EndIndex - sdf.StartIndex);
             do
             {
                 hitPos = sdfPos;
-                var sdfuv = sdfPos / sdf.SDFBounds.Size + 0.5f;
-                voxel = SampleSDF(sdf.StartIndex, sdf.EndIndex, sdfuv, sdf.Dimension);
-                curDis = voxel.NormalSDF.w;
-                var NoL = dot(voxel.NormalSDF.xyz, dir);
+                sdfuv = sdfPos / sdf.SDFBounds.Size + 0.5f;
+                var sdfVal = SampleSDFValue(slice,in sdfuv,in sdf.Dimension);
+                curDis = sdfVal.w;
+                var NoL = dot(sdfVal.xyz, dir);
                 hit = curDis < 0.01f && NoL < 0;
                 sdfPos = sdfPos + dir * max(abs(curDis), 0.01f);
                 cnt++;
             }
             while (!hit && sizeBound.Contains(hitPos));
+            voxel = hit ? SampleSDF(sdf.StartIndex, sdf.EndIndex, in sdfuv, in sdf.Dimension) : default;
             hitPos += sdf.SDFBounds.Center;
             return hit;
         }
 
-        unsafe SDFVoxel SampleSDF(int startIdx,int endIdx, float3 uv, int3 dimension)
+        float4 SampleSDFValue(NativeSlice<SDFVoxel> tex, in float3 uv, in int3 size)
+        {
+            var maxSize = size - 1;
+            //uv = math.frac(uv);
+
+            var uv_img = uv * size;
+            var uv0 = math.clamp(math.floor(uv_img), Unity.Mathematics.int3.zero, maxSize);
+            var uv1 = math.clamp(uv0 + 1, Unity.Mathematics.int3.zero, maxSize);
+
+            var cuv0 = lerpSDF(ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv0.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv0.y * size.x + uv1.x)), uv_img.x - uv0.x);
+            var cuv1 = lerpSDF(ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv1.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv0.z * size.y * size.x + uv1.y * size.x + uv1.x)), uv_img.x - uv0.x);
+            var cFinal = math.lerp(cuv0, cuv1, uv_img.y - uv0.y);
+            cuv0 = lerpSDF(ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv0.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv0.y * size.x + uv1.x)), uv_img.x - uv0.x);
+            cuv1 = lerpSDF(ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv1.y * size.x + uv0.x)), ref tex.GetByRef((int)(uv1.z * size.y * size.x + uv1.y * size.x + uv1.x)), uv_img.x - uv0.x);
+            var cFinal2 = math.lerp(cuv0, cuv1, uv_img.y - uv0.y);
+            var cFinal3 = math.lerp(cFinal, cFinal2, uv_img.z - uv0.z);
+            return cFinal3;
+        }
+
+        float4 lerpSDF(ref SDFVoxel a, ref SDFVoxel b, float t)
+        {
+            return math.lerp(a.NormalSDF, b.NormalSDF, t);
+        }
+
+        unsafe SDFVoxel SampleSDF(int startIdx, int endIdx, in float3 uv, in int3 dimension)
         {
             SDFVoxel* ptr = (SDFVoxel*)Voxels.GetUnsafeReadOnlyPtr();
             return tex3d(ptr + startIdx, uv, dimension);

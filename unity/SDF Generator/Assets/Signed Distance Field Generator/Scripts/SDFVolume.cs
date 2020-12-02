@@ -19,6 +19,7 @@ namespace SDFGenerator
         public AABB SDFBounds;
         public int3 Dimension;
         public float4x4 WorldToLocal;
+        public float4x4 WorldToLocalInv;
         public int StartIndex;
         public int EndIndex;
     }

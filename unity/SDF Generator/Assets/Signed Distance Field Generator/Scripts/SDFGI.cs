@@ -103,6 +103,7 @@ namespace SDFGenerator
                 info.SDFBounds = volume.SDFBounds;
                 info.Dimension = volume.Dimension;
                 info.WorldToLocal = volume.WorldToLocal;
+                info.WorldToLocalInv = math.inverse(volume.WorldToLocal);
                 info.StartIndex = curIdx;
                 info.EndIndex = curIdx + info.Dimension.x * info.Dimension.y * info.Dimension.z; 
                 volumeInfos[i] = info;

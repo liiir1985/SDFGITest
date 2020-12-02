@@ -17,12 +17,21 @@ namespace SDFGenerator
 {
     public static class Common
 	{
-        public static bool IntersectAABBRay(AABB aabb, float3 origin, float3 dir)
+        public unsafe static ref T GetByRef<T>(this NativeArray<T> arr, int index) where T : struct
         {
-            return IntersectAABBRay(aabb, origin, dir, out _, out _);
+            return ref UnsafeUtility.ArrayElementAsRef<T>(arr.GetUnsafeReadOnlyPtr(), index);
+        }
+
+        public unsafe static ref T GetByRef<T>(this NativeSlice<T> arr, int index) where T : struct
+        {
+            return ref UnsafeUtility.ArrayElementAsRef<T>(arr.GetUnsafeReadOnlyPtr(), index);
+        }
+        public static bool IntersectAABBRay(in AABB aabb, in float3 origin, in float3 dir)
+        {
+            return IntersectAABBRay(in aabb, in origin, in dir, out _, out _);
         }
         
-        public static bool IntersectAABBRay(AABB aabb, float3 origin, float3 dir, out float tmin, out float tmax)
+        public static bool IntersectAABBRay(in AABB aabb, in float3 origin, in float3 dir, out float tmin, out float tmax)
         {
             float3 dir_inv = 1.0f / dir;
             float t1 = (aabb.Min[0] - origin[0]) * dir_inv[0];
