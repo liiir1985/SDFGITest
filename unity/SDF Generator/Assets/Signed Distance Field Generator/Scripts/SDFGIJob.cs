@@ -250,7 +250,7 @@ namespace SDFGenerator
         {
 #if NO_BILINEAR
             var maxSize = size - 1;
-            var uv_img = min(round(uv * size), maxSize);
+            var uv_img = clamp(round(uv * size), Unity.Mathematics.int3.zero, maxSize);
             return tex[(int)(uv_img.z * size.y * size.x + uv_img.y * size.x + uv_img.x)].NormalSDF;
 #else
             var maxSize = size - 1;
