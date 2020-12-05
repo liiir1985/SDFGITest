@@ -67,15 +67,18 @@ namespace SDFGenerator
 
 
                     var hash = Hammersley16((uint)(index), (uint)GIMap.Length, Random);
-                    var H = ImportanceSampleGGX(hash, 1f - normal.w);
+                    var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1f - normal.w);ImportanceSampleGGX(hash, 1f - normal.w);
                     float pdf = H.w;
-                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+                    var NN = normalize(normal.xyz);
+                    var N = TangentToWorld(H.xyz, NN);
                     var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                    //rayDir = reflect(rayDir, N.xyz);
-                    rayDir = reflect(rayDir, normalize(normal.xyz)); 
-                    var L = RayMarch(worldPos, rayDir, index, GIMap.Length, randomSeed, ref randomIndex);
-                    //color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
-                    color += saturate(float4(L, 1f));
+                    rayDir = reflect(rayDir, N.xyz);
+                    //rayDir = reflect(rayDir, normalize(normal.xyz)); 
+                    float3 L = default;
+                    if (dot(rayDir, NN) > 0)
+                        L = RayMarch(worldPos, rayDir, index, GIMap.Length, randomSeed, ref randomIndex);
+                    color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                    //color += saturate(float4(L, 1f));
                 }
             }
             return (color.xyz / SPP); 
@@ -103,13 +106,16 @@ namespace SDFGenerator
 
 
                         var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
-                        var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1f - normal.w);
+                        var H = UniformSampleCone(hash, 0f);// ImportanceSampleGGX(hash, 1f - normal.w);
                         float pdf = H.w;
-                        var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+                        var NN = normalize(normal.xyz);
+                        var N = TangentToWorld(H.xyz, NN);
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
                         rayDir = reflect(rayDir, N.xyz);
                         //rayDir = reflect(rayDir, normalize(normal.xyz));
-                        var L = RayMarch(in worldPos, in rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
+                        float3 L = default;
+                        if (dot(rayDir, NN) > 0)
+                            L = RayMarch(in worldPos, in rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
                         color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
                         //color += saturate(float4(L, 1f));
                     }
@@ -147,7 +153,7 @@ namespace SDFGenerator
                 {
                     var worldPos = hitPos;
                     var rayDir = -dir;
-                    var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
+                    var H = UniformSampleCone(hash, 0f);// ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
                     float pdf = H.w;
                     var N = TangentToWorld(H.xyz, normalize(normal.xyz));
                     var albedo = (float3)voxel.SurfaceAlbedoRough.xyz;
@@ -186,6 +192,7 @@ namespace SDFGenerator
                             SDFVoxel result = default;
                             if (RayCastSDF(in volume, in localPos, in localDir, out result, out var sdfPos))
                             {
+
                                 sdfPos = mul(volume.WorldToLocalInv, float4(sdfPos, 1)).xyz;
                                 var dis = distancesq(sdfPos, pos);
                                 if (dis < minDistance)
@@ -237,7 +244,7 @@ namespace SDFGenerator
                 var sdfVal = SampleSDFValue(slice,in sdfuv,in sdf.Dimension);
                 curDis = sdfVal.w;
                 var NoL = dot(sdfVal.xyz, dir);
-                hit = curDis < 0.01f && NoL < 0;
+                hit = curDis < 0.01f && NoL < 0; 
                 sdfPos = sdfPos + dir * max(abs(curDis), 0.01f);
                 cnt++;
             }
