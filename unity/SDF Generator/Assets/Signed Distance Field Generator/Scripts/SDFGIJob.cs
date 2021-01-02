@@ -125,6 +125,11 @@ namespace SDFGenerator
             }
         }
 
+        float LambertPDF(in float3 dir, in float3 normal)
+        {
+            return saturate(dot(dir, normal)) * PI;
+        }
+
         float3 RayMarch(in float3 pos, in float3 dir, int index, int numSamples, int3 randomSeed, ref int randomIdx)
         {
             SDFVoxel voxel;
