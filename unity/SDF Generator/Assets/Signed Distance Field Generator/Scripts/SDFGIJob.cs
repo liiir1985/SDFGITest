@@ -52,7 +52,7 @@ namespace SDFGenerator
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.5f;
-        const int SPP = 64;
+        const int SPP = 512;
 
         public float3 PathTrace(int index)
         {
