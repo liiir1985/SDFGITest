@@ -47,6 +47,8 @@ namespace SDFGenerator
         public float3 EyePos;
         public float3 LightDir;
         public float3 LightColor;
+        public float3 EquiatorColor;
+        public float3 SkyColor;
         public int FrameIDMod8;
 
         const float RussianRoulette = 0.5f;
@@ -181,7 +183,9 @@ namespace SDFGenerator
                 return L_dir + L_Indir.xyz;
             }
             else
-                return default(float3);
+            {
+                return math.lerp(EquiatorColor, SkyColor, saturate(dot(dir, up())));
+            }
         }
 
         bool RayCast(in float3 pos, in float3 dir, out SDFVoxel voxel, out SDFVolumeInfo hitVolume, out float3 hitPos)

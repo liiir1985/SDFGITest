@@ -18,6 +18,7 @@ namespace SDFGenerator
     public static class Common
 	{
         public const float Inv_Pi = 1 / PI;
+        public static float3 up = new float3(0, 1, 0);
         public static float Square(float x)
         {
             return x * x;

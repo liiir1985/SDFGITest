@@ -35,6 +35,10 @@ namespace SDFGenerator
         [SerializeField]
         Texture2D normalTexture;
         [SerializeField]
+        Color equiatorColor;
+        [SerializeField]
+        Color skyColor;
+        [SerializeField]
         Light sun;
         [SerializeField]
         UnityEngine.UI.RawImage rawImg;
@@ -174,6 +178,8 @@ namespace SDFGenerator
             job.EyePos = camera.transform.position;
             job.LightDir = -sun.transform.forward;
             job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity;
+            job.EquiatorColor = new float3(equiatorColor.r, equiatorColor.g, equiatorColor.b);
+            job.SkyColor = new float3(skyColor.r, skyColor.g, skyColor.b);
 
             job.PathTrace(index);
         }
@@ -199,6 +205,8 @@ namespace SDFGenerator
             job.EyePos = camera.transform.position;
             job.LightDir = -sun.transform.forward;
             job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity * 1.5f;
+            job.EquiatorColor = new float3(equiatorColor.r, equiatorColor.g, equiatorColor.b);
+            job.SkyColor = new float3(skyColor.r, skyColor.g, skyColor.b);
 
             var handle = job.ScheduleBatch(job.GIMap.Length, 256);
             handle.Complete();
