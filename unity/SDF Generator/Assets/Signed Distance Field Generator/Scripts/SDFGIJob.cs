@@ -17,6 +17,8 @@ using static SDFGenerator.Montcalo;
 using static SDFGenerator.RandomFunc;
 using static SDFGenerator.Common;
 using static Unity.Mathematics.math;
+using static SDFGenerator.BSDF;
+using static SDFGenerator.ShadingModel;
 
 namespace SDFGenerator
 {
@@ -106,23 +108,40 @@ namespace SDFGenerator
 
 
                         var hash = Hammersley16((uint)(idx), (uint)GIMap.Length, Random);
-                        var H = UniformSampleCone(hash, 0f);// ImportanceSampleGGX(hash, 1f - normal.w);
-                        float pdf = H.w;
-                        var NN = normalize(normal.xyz);
-                        var N = TangentToWorld(H.xyz, NN);
+
                         var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                        rayDir = reflect(rayDir, N.xyz);
-                        //rayDir = reflect(rayDir, normalize(normal.xyz));
-                        float3 L = default;
-                        if (dot(rayDir, NN) > 0)
-                            L = RayMarch(in worldPos, in rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
-                        color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                        var metallic = tex2d(MetallicMap, uv, GBufferDimension);
+                        var c = TraceColor(worldPos, normal.xyz, ref rayDir, Random, hash, randomSeed, idx, ref randomIndex, albedo.xyz, 1f - normal.w, metallic.w, 1);
+                        color += c;
                         //color += saturate(float4(L, 1f));
                     }
                 }
 
                 GIMap[idx] = (half4)(color / SPP);
             }
+        }
+
+        float4 TraceColor(in float3 worldPos, in float3 normal, ref float3 rayDir, in uint2 Random, in float2 hash, int3 randomSeed, int idx, ref int randomIndex, in float3 albedo, float roughness, float metallic, float russianRollete)
+        {
+            var NN = normalize(normal);
+            var NoV = saturate(dot(NN, rayDir));
+            var viewDir = rayDir;
+
+            float geometrySchlick = F_Schlick(IorToFresnel(1, 0.004f), 1f, NoV);
+            float kD = 1 - geometrySchlick;
+            bool reflected = RandFast(Random) < geometrySchlick;
+            var H_GGX = ImportanceSampleGGX(hash, roughness);
+            var H_Lambert = UniformSampleCone(hash, 0f);
+            var H = reflected ? H_GGX : H_Lambert;
+            float pdf = H_GGX.w * geometrySchlick + H_Lambert.w * kD;
+            var N = TangentToWorld(H.xyz, NN);
+            rayDir = reflect(rayDir, N.xyz);
+            //rayDir = reflect(rayDir, normalize(normal.xyz));
+            float3 L = default;
+            if (dot(rayDir, NN) > 0)
+                L = RayMarch(in worldPos, in rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
+            var brdf = Default_Lit(albedo, N, rayDir, viewDir, roughness, metallic);
+            return saturate(float4(L * brdf * saturate(dot(rayDir, N.xyz)) / (pdf * russianRollete + float.Epsilon), 1f));
         }
 
         float LambertPDF(in float3 dir, in float3 normal)
@@ -158,14 +177,11 @@ namespace SDFGenerator
                 {
                     var worldPos = hitPos;
                     var rayDir = -dir;
-                    var H = UniformSampleCone(hash, 0f);// ImportanceSampleGGX(hash, 1 - voxel.SurfaceAlbedoRough.w);
-                    float pdf = H.w;
-                    var N = TangentToWorld(H.xyz, normalize(normal.xyz));
+
                     var albedo = (float3)voxel.SurfaceAlbedoRough.xyz;
-                    rayDir = reflect(rayDir, N.xyz);
-                    //rayDir = reflect(rayDir, normalize(normal.xyz));
-                    var L = RayMarch(in worldPos, in rayDir, index, numSamples, randomSeed, ref randomIdx);
-                    L_Indir += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w * RussianRoulette + float.Epsilon), 1f));
+                    var c = TraceColor(worldPos, normal, ref rayDir, Random, hash, randomSeed, index, ref randomIdx, albedo.xyz, voxel.SurfaceAlbedoRough.w, voxel.EmissionMetallic.w, RussianRoulette);
+
+                    L_Indir += c;
                 }
 
                 return L_dir + L_Indir.xyz;

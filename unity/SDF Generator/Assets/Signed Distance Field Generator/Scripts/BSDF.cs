@@ -18,7 +18,16 @@ namespace SDFGenerator
 {
     public static class BSDF
     {
-        public static float F_Schlick(float F0, float F90, float HoV)
+		public static float IorToFresnel(float transmittedIor, float incidentIor)
+		{
+			return pow2(transmittedIor - incidentIor) / pow2(transmittedIor + incidentIor);
+		}
+
+		public static float3 IorToFresnel(float3 transmittedIor, float3 incidentIor)
+		{
+			return pow2(transmittedIor - incidentIor) / pow2(transmittedIor + incidentIor);
+		}
+		public static float F_Schlick(float F0, float F90, float HoV)
         {
             return F0 + (F90 - F0) * pow5(1 - HoV);
         }
