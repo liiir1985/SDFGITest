@@ -19,6 +19,7 @@ using static SDFGenerator.Common;
 using static Unity.Mathematics.math;
 using static SDFGenerator.BSDF;
 using static SDFGenerator.ShadingModel;
+using Unity.Entities;
 
 namespace SDFGenerator
 {
@@ -69,17 +70,10 @@ namespace SDFGenerator
 
 
                     var hash = Hammersley16((uint)(index), (uint)GIMap.Length, Random);
-                    var H = UniformSampleCone(hash, 0);// ImportanceSampleGGX(hash, 1f - normal.w);ImportanceSampleGGX(hash, 1f - normal.w);
-                    float pdf = H.w;
-                    var NN = normalize(normal.xyz);
-                    var N = TangentToWorld(H.xyz, NN);
                     var albedo = tex2d(AlbedoMap, uv, GBufferDimension);
-                    rayDir = reflect(rayDir, N.xyz);
-                    //rayDir = reflect(rayDir, normalize(normal.xyz)); 
-                    float3 L = default;
-                    if (dot(rayDir, NN) > 0)
-                        L = RayMarch(worldPos, rayDir, index, GIMap.Length, randomSeed, ref randomIndex);
-                    color += saturate(float4(L * (albedo.xyz / PI) * saturate(dot(rayDir, N.xyz)) / (H.w + float.Epsilon), 1f));
+                    var metallic = tex2d(MetallicMap, uv, GBufferDimension);
+                    var c = TraceColor(worldPos, normal.xyz, ref rayDir, Random, hash, randomSeed, index, ref randomIndex, albedo.xyz, 1f - normal.w, metallic.w, 1);
+                    color += c;
                     //color += saturate(float4(L, 1f));
                 }
             }
@@ -124,8 +118,8 @@ namespace SDFGenerator
         float4 TraceColor(in float3 worldPos, in float3 normal, ref float3 rayDir, in uint2 Random, in float2 hash, int3 randomSeed, int idx, ref int randomIndex, in float3 albedo, float roughness, float metallic, float russianRollete)
         {
             var NN = normalize(normal);
-            var NoV = saturate(dot(NN, rayDir));
-            var viewDir = rayDir;
+            var viewDir = -rayDir;
+            var NoV = saturate(dot(NN, viewDir));
 
             float geometrySchlick = F_Schlick(IorToFresnel(1, 0.004f), 1f, NoV);
             float kD = 1 - geometrySchlick;
@@ -141,7 +135,7 @@ namespace SDFGenerator
             if (dot(rayDir, NN) > 0)
                 L = RayMarch(in worldPos, in rayDir, idx, GIMap.Length, randomSeed, ref randomIndex);
             var brdf = Default_Lit(albedo, N, rayDir, viewDir, roughness, metallic);
-            return saturate(float4(L * brdf * saturate(dot(rayDir, N.xyz)) / (pdf * russianRollete + float.Epsilon), 1f));
+            return float4(clamp(L * brdf * saturate(dot(rayDir, N.xyz)) / (pdf * russianRollete + float.Epsilon), default, L), 1f);
         }
 
         float LambertPDF(in float3 dir, in float3 normal)

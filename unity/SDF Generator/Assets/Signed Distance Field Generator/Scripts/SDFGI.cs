@@ -198,7 +198,7 @@ namespace SDFGenerator
             job.Dimension = new int2(giTexture.width, giTexture.height);
             job.EyePos = camera.transform.position;
             job.LightDir = -sun.transform.forward;
-            job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity;
+            job.LightColor = new float3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity * 1.5f;
 
             var handle = job.ScheduleBatch(job.GIMap.Length, 256);
             handle.Complete();

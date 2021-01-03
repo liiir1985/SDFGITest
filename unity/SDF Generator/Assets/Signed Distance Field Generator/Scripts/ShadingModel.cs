@@ -22,7 +22,7 @@ namespace SDFGenerator
         public static float3 Default_Lit(in float3 Albedo, in float3 normal, in float3 lightDir, in float3 viewDir, float roughness, float metallic)
         {
             float3 diffuse = Diffuse_Lambert(Albedo);
-            var halfVec = (lightDir + viewDir) / 2f;
+            var halfVec = normalize((lightDir + viewDir) / 2f);
             float NoH = saturate(dot(normal, halfVec));
             float NoV = saturate(dot(normal, viewDir));
             float NoL = saturate(dot(normal, lightDir));
@@ -32,7 +32,8 @@ namespace SDFGenerator
             float3 f_schlick = F_Schlick(F0, float3(1), NoV);
             float g = Vis_Smith(NoL, NoV, roughness);
             float3 kD = (float3(1) - f_schlick) * (1 - metallic);
-            return kD * diffuse + (d_ggx * f_schlick * g) / (4 * NoL * NoV);
+            //return kD * diffuse;
+            return saturate(kD * diffuse) + saturate((d_ggx * f_schlick * g) / (4 * NoL * NoV));
         }
     }
 }
