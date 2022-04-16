@@ -51,8 +51,8 @@ namespace SDFGenerator
         public float3 SkyColor;
         public int FrameIDMod8;
 
-        const float RussianRoulette = 0.5f;
-        const int SPP = 512;
+        const float RussianRoulette = 0.166f;
+        const int SPP = 64;
 
         public float3 PathTrace(int index)
         {
